@@ -98,29 +98,31 @@ export async function onRequestPost(context) {
     const ownershipCode = makeOwnershipCode();
     const ownershipHash = await hashCode(ownershipCode);
 
-    const insertArticle = context.env.DB.prepare(
-      `INSERT INTO articles (
-        title,
-        slug,
-        content,
-        summary,
-        category_id,
-        author_name,
-        author_whatsapp,
-        image_url,
-        status,
-        updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP)`
-    ).bind(
-      title,
-      slug,
-      content,
-      summary || content.slice(0, 180),
-      categoryId,
-      authorName,
-      whatsapp,
-      imageUrl || null
-    );
+    
+const insertArticle = context.env.DB.prepare(
+  `INSERT INTO articles (
+    title,
+    slug,
+    content,
+    summary,
+    category_id,
+    author_name,
+    author_whatsapp,
+    image_url,
+    status,
+    updated_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'published', CURRENT_TIMESTAMP)`
+).bind(
+  title,
+  slug,
+  content,
+  summary || content.slice(0, 180),
+  categoryId,
+  authorName,
+  whatsapp,
+  imageUrl || null
+);
+
 
     const insertOwnership = context.env.DB.prepare(
       `INSERT INTO article_ownership (
@@ -149,12 +151,12 @@ export async function onRequestPost(context) {
 
     return json({
       success: true,
-      message: "Berita berhasil dikirim dan menunggu moderasi.",
+      message: "Berita berhasil diterbitkan dan dapat dibaca publik.",
       article: {
         id: articleId,
         title,
         slug,
-        status: "pending"
+        status: "published"
       },
       ownership_code: ownershipCode,
       warning: "Simpan kode kepemilikan ini. Kode hanya ditampilkan satu kali."
