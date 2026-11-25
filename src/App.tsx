@@ -3067,7 +3067,7 @@ useEffect(() => {
       }
 
       if (categoriesData.success) {
-        setCategories(categoriesData.categories);
+        setCategories(categoriesData.categories.map((category) => category.name));
       }
     } catch (error) {
       console.error('Gagal mengambil data WARTAKITA:', error);
