@@ -3046,7 +3046,7 @@ function Footer({ onNavigate, onSelectCategory, categories }) {
  */
 export default function App() {
   const [articles, setArticles] = useState([]);
-const [categories, setCategories] = useState(INITIAL_CATEGORIES);
+const [categoryRecords, setCategoryRecords] = useState([]);
 const [activeView, setActiveView] = useState('home');
 const [selectedCategory, setSelectedCategory] = useState('Semua');
 const [selectedArticleId, setSelectedArticleId] = useState(null);
@@ -3067,8 +3067,9 @@ useEffect(() => {
       }
 
       if (categoriesData.success) {
-        setCategories(categoriesData.categories.map((category) => category.name));
-      }
+  setCategoryRecords(categoriesData.categories);
+  setCategories(categoriesData.categories.map((category) => category.name));
+}
     } catch (error) {
       console.error('Gagal mengambil data WARTAKITA:', error);
     }
