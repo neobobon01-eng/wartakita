@@ -3045,11 +3045,11 @@ function Footer({ onNavigate, onSelectCategory, categories }) {
  * ============================================================================
  */
 export default function App() {
-  const [articles, setArticles] = useState(INITIAL_ARTICLES);
-  const [categories, setCategories] = useState(INITIAL_CATEGORIES);
-  const [activeView, setActiveView] = useState('home');
-  const [selectedCategory, setSelectedCategory] = useState('Semua');
-  const [selectedArticleId, setSelectedArticleId] = useState(INITIAL_ARTICLES[0].id);
+  const [articles, setArticles] = useState([]);
+const [categories, setCategories] = useState(INITIAL_CATEGORIES);
+const [activeView, setActiveView] = useState('home');
+const [selectedCategory, setSelectedCategory] = useState('Semua');
+const [selectedArticleId, setSelectedArticleId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
