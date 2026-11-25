@@ -4,10 +4,10 @@ function json(data, status = 200) {
 }
 
 async function hashCode(code) {
-  const encoded = new TextEncoder().encode(code);
-  const hash = await crypto.subtle.digest("SHA-256", encoded);
+  const data = new TextEncoder().encode(code);
+  const digest = await crypto.subtle.digest("SHA-256", data);
 
-  return Array.from(new Uint8Array(hash))
+  return Array.from(new Uint8Array(digest))
     .map(byte => byte.toString(16).padStart(2, "0"))
     .join("");
 }
@@ -21,11 +21,11 @@ function makeSlug(title) {
     .replace(/^-|-$/g, "")
     .slice(0, 70);
 
-  return base || "berita";
+  return `${base || "berita"}-${crypto.randomUUID().slice(0, 8)}`;
 }
 
 function makeOwnershipCode() {
-  const bytes = crypto.getRandomValues(new Uint8Array(12));
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
 
   return Array.from(bytes)
     .map(byte => byte.toString(16).padStart(2, "0"))
@@ -50,6 +50,7 @@ export async function onRequestPost(context) {
       title.length > 200 ||
       content.length < 50 ||
       content.length > 50000 ||
+      summary.length > 500 ||
       authorName.length < 2 ||
       authorName.length > 100 ||
       !/^\+?[0-9]{9,16}$/.test(whatsapp) ||
@@ -58,7 +59,7 @@ export async function onRequestPost(context) {
     ) {
       return json({
         success: false,
-        message: "Data berita tidak valid. Periksa judul, isi, penulis, WhatsApp, dan kategori."
+        message: "Data berita tidak valid. Periksa kembali semua isian."
       }, 400);
     }
 
@@ -70,7 +71,7 @@ export async function onRequestPost(context) {
       } catch {
         return json({
           success: false,
-          message: "Alamat gambar tidak valid."
+          message: "URL gambar tidak valid."
         }, 400);
       }
 
@@ -93,25 +94,23 @@ export async function onRequestPost(context) {
       }, 400);
     }
 
-    let slug = makeSlug(title);
-    let suffix = crypto.randomUUID().slice(0, 8);
-
-    const existing = await context.env.DB.prepare(
-      "SELECT id FROM articles WHERE slug = ?"
-    ).bind(slug).first();
-
-    if (existing) {
-      slug = `${slug}-${suffix}`;
-    }
-
+    const slug = makeSlug(title);
     const ownershipCode = makeOwnershipCode();
     const ownershipHash = await hashCode(ownershipCode);
 
-    const result = await context.env.DB.prepare(
-      `INSERT INTO articles
-       (title, slug, content, summary, category_id,
-        author_name, author_whatsapp, image_url, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')`
+    const insertArticle = context.env.DB.prepare(
+      `INSERT INTO articles (
+        title,
+        slug,
+        content,
+        summary,
+        category_id,
+        author_name,
+        author_whatsapp,
+        image_url,
+        status,
+        updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP)`
     ).bind(
       title,
       slug,
@@ -121,15 +120,32 @@ export async function onRequestPost(context) {
       authorName,
       whatsapp,
       imageUrl || null
-    ).run();
+    );
 
-    const articleId = result.meta.last_row_id;
+    const insertOwnership = context.env.DB.prepare(
+      `INSERT INTO article_ownership (
+        article_id,
+        ownership_code_hash
+      )
+      SELECT id, ?
+      FROM articles
+      WHERE slug = ?`
+    ).bind(ownershipHash, slug);
 
-    await context.env.DB.prepare(
-      `INSERT INTO article_ownership
-       (article_id, ownership_code_hash)
-       VALUES (?, ?)`
-    ).bind(articleId, ownershipHash).run();
+    const results = await context.env.DB.batch([
+      insertArticle,
+      insertOwnership
+    ]);
+
+    if (
+      !results[0].success ||
+      !results[1].success ||
+      results[1].meta.changes !== 1
+    ) {
+      throw new Error("Penyimpanan artikel atau kepemilikan gagal.");
+    }
+
+    const articleId = results[0].meta.last_row_id;
 
     return json({
       success: true,
