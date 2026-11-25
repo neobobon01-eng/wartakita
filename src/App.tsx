@@ -3050,6 +3050,33 @@ const [categories, setCategories] = useState(INITIAL_CATEGORIES);
 const [activeView, setActiveView] = useState('home');
 const [selectedCategory, setSelectedCategory] = useState('Semua');
 const [selectedArticleId, setSelectedArticleId] = useState(null);
+  
+useEffect(() => {
+  async function loadData() {
+    try {
+      const [articlesResponse, categoriesResponse] = await Promise.all([
+        fetch('/api/articles-list'),
+        fetch('/api/categories')
+      ]);
+
+      const articlesData = await articlesResponse.json();
+      const categoriesData = await categoriesResponse.json();
+
+      if (articlesData.success) {
+        setArticles(articlesData.articles);
+      }
+
+      if (categoriesData.success) {
+        setCategories(categoriesData.categories);
+      }
+    } catch (error) {
+      console.error('Gagal mengambil data WARTAKITA:', error);
+    }
+  }
+
+  loadData();
+}, []);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
