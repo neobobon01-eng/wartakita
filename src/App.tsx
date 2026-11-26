@@ -1613,10 +1613,10 @@ function WriteArticleView({ categories, onPublishArticle, onNavigate, onShowToas
           <p className="text-xs font-bold uppercase tracking-wider text-orange-300">
             Kode Kepemilikan Berita Anda
           </p>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/10 rounded-xl p-4 border border-white/15 min-w-0 w-full">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/10 rounded-xl p-4 border border-white/15">
             <code
               ref={codeTextRef}
-              className="block w-full min-w-0 whitespace-normal break-all text-lg sm:text-2xl font-mono font-extrabold tracking-[0.12em] leading-relaxed text-orange-300 select-all"
+              className="text-2xl sm:text-3xl font-mono font-extrabold tracking-widest text-orange-300 select-all"
             >
               {publishedConfirmation.ownershipCode}
             </code>
@@ -1989,7 +1989,7 @@ function ManageMyArticlesView({
     setConfirmDeleteOpen(false);
   };
 
-  const handleCheckCode = (e) => {
+  const handleCheckCode = async (e) => {
     e.preventDefault();
     const cleanCode = codeInput.trim().toUpperCase();
     setLookupError('');
@@ -2000,23 +2000,48 @@ function ManageMyArticlesView({
       return;
     }
 
-    // Simulasi pemeriksaan kepemilikan pada prototipe:
-    // Hanya berita yang memiliki ownershipCode yang sama persis yang dapat diakses.
-    const matched = articles.find(
-      (a) => a.ownershipCode.toUpperCase() === cleanCode && a.status !== 'deleted'
-    );
+    try {
+      const response = await fetch('/api/articles/manage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'verify',
+          ownership_code: cleanCode
+        })
+      });
+      const result = await response.json();
 
-    if (!matched) {
-      setLookupError(
-        'Kode kepemilikan tidak ditemukan atau berita sudah dihapus. Pastikan kode diketik dengan tepat.'
-      );
-      onShowToast('Kode kepemilikan tidak valid.', 'error');
-      return;
+      if (!response.ok || !result.success || !result.article) {
+        throw new Error(result.message || 'Kode kepemilikan tidak valid.');
+      }
+
+      const item = result.article;
+      const verified = {
+        id: item.id,
+        slug: item.slug,
+        title: item.title,
+        category: item.category_name || categories[0] || 'Berita Warga',
+        summary: item.summary || '',
+        content: item.content || '',
+        author: item.author_name || 'Warga',
+        whatsapp: item.author_whatsapp || '',
+        publishedAt: item.created_at || '',
+        timestamp: Date.now(),
+        views: Number(item.views || 0),
+        isFeatured: false,
+        status: item.status || 'published',
+        reportCount: 0,
+        reportReason: '',
+        image: item.image_url || ''
+      };
+
+      setVerifiedArticleId(verified.id);
+      loadArticleIntoEditState(verified);
+      onShowToast('Kode valid! Berita milik Anda berhasil ditemukan.');
+    } catch (error) {
+      setLookupError(error.message || 'Kode kepemilikan tidak valid.');
+      onShowToast(error.message || 'Kode kepemilikan tidak valid.', 'error');
     }
-
-    setVerifiedArticleId(matched.id);
-    loadArticleIntoEditState(matched);
-    onShowToast('Kode valid! Anda dapat mengedit atau menghapus berita milik Anda.');
   };
 
   const handleReplaceImage = (e) => {
@@ -2037,31 +2062,47 @@ function ManageMyArticlesView({
     reader.readAsDataURL(file);
   };
 
-  const handleSaveEdit = (e) => {
+  const handleSaveEdit = async (e) => {
     e.preventDefault();
     if (!verifiedArticle) return;
     const trimmedTitle = editTitle.trim();
     const trimmedContent = editContent.trim();
-    if (!trimmedTitle || !trimmedContent) {
-      onShowToast('Judul dan isi berita tidak boleh kosong.', 'warning');
+    if (trimmedTitle.length < 10 || trimmedTitle.length > 200 || trimmedContent.length < 50) {
+      onShowToast('Judul harus 10–200 karakter dan isi berita minimal 50 karakter.', 'warning');
       return;
     }
 
-    onUpdateArticle(verifiedArticle.id, {
+    const saved = await onUpdateArticle(verifiedArticle.id, {
       title: trimmedTitle,
       category: editCategory,
       summary: editSummary.trim(),
-      content: trimmedContent,
-      image: editImage
-    });
+      content: trimmedContent
+    }, codeInput.trim().toUpperCase());
+
+    if (saved) {
+      const refreshed = {
+        ...verifiedArticle,
+        title: trimmedTitle,
+        category: editCategory,
+        summary: editSummary.trim(),
+        content: trimmedContent
+      };
+      loadArticleIntoEditState(refreshed);
+    }
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!verifiedArticle) return;
-    onDeleteArticle(verifiedArticle.id, 'Dihapus oleh pemilik berita');
-    setVerifiedArticleId(null);
-    setCodeInput('');
-    setConfirmDeleteOpen(false);
+    const deleted = await onDeleteArticle(
+      verifiedArticle.id,
+      'Dihapus oleh pemilik berita',
+      codeInput.trim().toUpperCase()
+    );
+    if (deleted) {
+      setVerifiedArticleId(null);
+      setCodeInput('');
+      setConfirmDeleteOpen(false);
+    }
   };
 
   return (
@@ -2084,7 +2125,7 @@ function ManageMyArticlesView({
             type="text"
             value={codeInput}
             onChange={(e) => setCodeInput(e.target.value)}
-            placeholder="Masukkan kode kepemilikan (contoh: WK-SUNGAI-8492)"
+            placeholder="Masukkan kode kepemilikan 32 karakter"
             aria-label="Kode kepemilikan berita"
             className="flex-1 px-4 py-3 rounded-xl border border-slate-300 font-mono text-sm uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500"
           />
@@ -2104,9 +2145,8 @@ function ManageMyArticlesView({
         )}
 
         <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs text-slate-600 leading-relaxed">
-          <strong>Catatan Keamanan Prototipe:</strong> Pada implementasi produksi dengan
-          Cloudflare Workers dan D1, pemeriksaan kepemilikan dilakukan secara aman oleh backend
-          menggunakan hash kode tanpa menyimpan kode asli di sisi klien.
+          <strong>Keamanan:</strong> Kode kepemilikan diverifikasi oleh server menggunakan hash
+          SHA-256. Jangan bagikan kode ini kepada orang lain.
         </div>
       </div>
 
@@ -2116,7 +2156,7 @@ function ManageMyArticlesView({
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-4">
             <div>
               <span className="text-xs font-bold text-emerald-700 uppercase">
-                Kepemilikan Terverifikasi (Simulasi)
+                Kepemilikan Terverifikasi
               </span>
               <h2 className="text-xl font-extrabold text-[#0b1f3a]">Edit Berita Milik Anda</h2>
             </div>
@@ -2179,7 +2219,7 @@ function ManageMyArticlesView({
 
             <div>
               <label className="block text-sm font-bold text-[#0b1f3a] mb-1.5">
-                Ganti Foto Berita
+                Pratinjau Foto Berita (foto baru belum tersimpan ke server)
               </label>
               {editImage && (
                 <img
@@ -3250,6 +3290,71 @@ export default function App() {
     }
   };
 
+  const handleUpdateOwnedArticle = async (articleId, updates, ownershipCode) => {
+    try {
+      const selectedCategory = categoryRecords.find(
+        (item) => item.name === updates.category
+      );
+      if (!selectedCategory) {
+        throw new Error('Kategori berita tidak ditemukan.');
+      }
+
+      const response = await fetch('/api/articles/manage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update',
+          article_id: articleId,
+          ownership_code: ownershipCode,
+          title: updates.title,
+          content: updates.content,
+          summary: updates.summary,
+          category_id: selectedCategory.id
+        })
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Perubahan berita gagal disimpan.');
+      }
+
+      setArticles((prev) => prev.map((article) =>
+        article.id === articleId
+          ? { ...article, ...updates, image: article.image }
+          : article
+      ));
+      showToast('Perubahan berita berhasil disimpan ke database.');
+      return true;
+    } catch (error) {
+      showToast(error.message || 'Perubahan berita gagal disimpan.', 'error');
+      return false;
+    }
+  };
+
+  const handleDeleteOwnedArticle = async (articleId, reason, ownershipCode) => {
+    try {
+      const response = await fetch('/api/articles/manage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'delete',
+          article_id: articleId,
+          ownership_code: ownershipCode
+        })
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Berita gagal dihapus.');
+      }
+
+      setArticles((prev) => prev.filter((article) => article.id !== articleId));
+      showToast('Berita berhasil dihapus dari database.');
+      return true;
+    } catch (error) {
+      showToast(error.message || 'Berita gagal dihapus.', 'error');
+      return false;
+    }
+  };
+
   const handleUpdateArticle = (articleId, updates) => {
     setArticles((prev) =>
       prev.map((a) => (a.id === articleId ? { ...a, ...updates } : a))
@@ -3382,8 +3487,8 @@ export default function App() {
           <ManageMyArticlesView
             articles={articles}
             categories={categories}
-            onUpdateArticle={handleUpdateArticle}
-            onDeleteArticle={handleDeleteArticle}
+            onUpdateArticle={handleUpdateOwnedArticle}
+            onDeleteArticle={handleDeleteOwnedArticle}
             onNavigate={(v, id) => navigateTo(v, id)}
             onShowToast={showToast}
           />
