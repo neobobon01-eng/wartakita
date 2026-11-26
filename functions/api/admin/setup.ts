@@ -5,7 +5,13 @@ function json(data: unknown, status = 200) {
   });
 }
 
-async function derivePassword(password: string, salt: Uint8Array) {
+async function derivePassword(
+  password: string,
+  salt: Uint8Array,
+  setStage: (value: string) => void
+) {
+  setStage('mengimpor_kunci_password');
+
   const material = await crypto.subtle.importKey(
     'raw',
     new TextEncoder().encode(password),
@@ -13,6 +19,8 @@ async function derivePassword(password: string, salt: Uint8Array) {
     false,
     ['deriveBits']
   );
+
+  setStage('menghitung_hash_pbkdf2');
 
   const bits = await crypto.subtle.deriveBits(
     {
@@ -100,8 +108,9 @@ export async function onRequestPost(context: any) {
 
     stage = 'membuat_hash_password';
 
-    const hash = await derivePassword(password, salt);
-
+    const hash = await derivePassword(password, salt, (value) => {
+  stage = value;
+});
     const stored = `pbkdf2_sha256$310000$${saltHex}$${hash}`;
 
     stage = 'menyimpan_akun_admin';
