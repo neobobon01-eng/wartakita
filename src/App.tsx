@@ -1613,10 +1613,10 @@ function WriteArticleView({ categories, onPublishArticle, onNavigate, onShowToas
           <p className="text-xs font-bold uppercase tracking-wider text-orange-300">
             Kode Kepemilikan Berita Anda
           </p>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/10 rounded-xl p-4 border border-white/15">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/10 rounded-xl p-4 border border-white/15 min-w-0 w-full">
             <code
               ref={codeTextRef}
-              className="text-2xl sm:text-3xl font-mono font-extrabold tracking-widest text-orange-300 select-all"
+              className="block w-full min-w-0 whitespace-normal break-all text-lg sm:text-2xl font-mono font-extrabold tracking-[0.12em] leading-relaxed text-orange-300 select-all"
             >
               {publishedConfirmation.ownershipCode}
             </code>
