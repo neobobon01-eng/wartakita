@@ -3175,6 +3175,73 @@ export default function App() {
       })
       .catch(() => {});
   }, []);
+
+  // Muat seluruh berita dari API khusus admin setelah sesi terverifikasi.
+  // Endpoint ini mengambil data langsung dari D1, termasuk status moderasi.
+  useEffect(() => {
+    if (!isAdminAuthenticated) return;
+
+    let cancelled = false;
+
+    async function loadAdminArticles() {
+      try {
+        const response = await fetch('/api/admin/articles', {
+          method: 'GET',
+          credentials: 'include',
+          cache: 'no-store'
+        });
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          throw new Error(data.message || 'Gagal mengambil daftar berita admin.');
+        }
+
+        const normalizedArticles = (data.articles || []).map((item) => {
+          const dateText = String(item.created_at || item.updated_at || '');
+          const parsedDate = dateText
+            ? new Date(dateText.includes('T') ? dateText : `${dateText.replace(' ', 'T')}Z`)
+            : new Date();
+          const safeDate = Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate;
+          const articleCategory = item.category_name || item.category || 'Berita Warga';
+
+          return {
+            id: item.id,
+            slug: item.slug,
+            title: item.title || '',
+            category: articleCategory,
+            summary: item.summary || '',
+            content: item.content || '',
+            author: item.author_name || item.author || 'Warga',
+            whatsapp: item.author_whatsapp || item.whatsapp || '',
+            publishedAt: formatIndonesianDate(safeDate),
+            timestamp: safeDate.getTime(),
+            views: Number(item.views || 0),
+            isFeatured: Boolean(item.is_featured || item.isFeatured),
+            status: item.status || 'published',
+            reportCount: Number(item.report_count || item.reportCount || 0),
+            reportReason: item.report_reason || item.reportReason || '',
+            ownershipCode: '',
+            image: item.image_url || createIllustrationDataUrl({
+              title: item.title || 'Berita WARTAKITA',
+              tag: articleCategory,
+              bgStart: '#0b1f3a',
+              bgEnd: '#1e3a8a',
+              accentColor: '#f97316'
+            })
+          };
+        });
+
+        if (!cancelled) setArticles(normalizedArticles);
+      } catch (error) {
+        console.error('Gagal memuat berita admin dari D1:', error);
+      }
+    }
+
+    loadAdminArticles();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdminAuthenticated]);
   const [toast, setToast] = useState(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
 
