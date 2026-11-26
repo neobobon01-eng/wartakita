@@ -1439,7 +1439,7 @@ function WriteArticleView({ categories, onPublishArticle, onNavigate, onShowToas
     setShowPreview((prev) => !prev);
   };
 
-  const handlePublishSubmit = (e) => {
+  const handlePublishSubmit = async (e) => {
     e.preventDefault();
     const err = validateForm();
     if (err) {
@@ -1457,7 +1457,7 @@ function WriteArticleView({ categories, onPublishArticle, onNavigate, onShowToas
       accentColor: '#f97316'
     });
 
-    const created = onPublishArticle({
+    const created = await onPublishArticle({
       author: author.trim(),
       whatsapp: whatsapp.trim(),
       title: title.trim(),
@@ -1466,11 +1466,13 @@ function WriteArticleView({ categories, onPublishArticle, onNavigate, onShowToas
         summary.trim() ||
         content
           .trim()
-          .replace(/\s+/g, ' ')
+          .replace(/\\s+/g, ' ')
           .slice(0, 155) + (content.trim().length > 155 ? '...' : ''),
       content: content.trim(),
       image: imagePreview || fallbackImg
     });
+
+    if (!created) return;
 
     setPublishedConfirmation(created);
     setCopiedCode(false);
@@ -3046,37 +3048,79 @@ function Footer({ onNavigate, onSelectCategory, categories }) {
  */
 export default function App() {
   const [articles, setArticles] = useState([]);
-const [categoryRecords, setCategoryRecords] = useState([]);
-const [activeView, setActiveView] = useState('home');
-const [selectedCategory, setSelectedCategory] = useState('Semua');
-const [selectedArticleId, setSelectedArticleId] = useState(null);
-  
-useEffect(() => {
-  async function loadData() {
-    try {
-      const [articlesResponse, categoriesResponse] = await Promise.all([
-        fetch('/api/articles-list'),
-        fetch('/api/categories')
-      ]);
+  const [categories, setCategories] = useState(INITIAL_CATEGORIES);
+  const [categoryRecords, setCategoryRecords] = useState([]);
+  const [activeView, setActiveView] = useState('home');
+  const [selectedCategory, setSelectedCategory] = useState('Semua');
+  const [selectedArticleId, setSelectedArticleId] = useState(null);
 
-      const articlesData = await articlesResponse.json();
-      const categoriesData = await categoriesResponse.json();
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const [articlesResponse, categoriesResponse] = await Promise.all([
+          fetch('/api/articles-list'),
+          fetch('/api/categories')
+        ]);
 
-      if (articlesData.success) {
-        setArticles(articlesData.articles);
+        const articlesData = await articlesResponse.json();
+        const categoriesData = await categoriesResponse.json();
+
+        if (articlesResponse.ok && articlesData.success) {
+          const normalizedArticles = (articlesData.articles || []).map((item) => {
+            const articleDateText = String(item.created_at || '');
+            const parsedDate = articleDateText
+              ? new Date(
+                  articleDateText.includes('T')
+                    ? articleDateText
+                    : `${articleDateText.replace(' ', 'T')}Z`
+                )
+              : new Date();
+            const safeDate = Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate;
+            const articleCategory = item.category_name || item.category || 'Berita Warga';
+
+            return {
+              id: item.id,
+              slug: item.slug,
+              title: item.title,
+              category: articleCategory,
+              summary: item.summary || '',
+              content: item.content || '',
+              author: item.author_name || item.author || 'Warga',
+              whatsapp: item.author_whatsapp || item.whatsapp || '',
+              publishedAt: formatIndonesianDate(safeDate),
+              timestamp: safeDate.getTime(),
+              views: Number(item.views || 0),
+              isFeatured: Boolean(item.is_featured || item.isFeatured),
+              status: item.status || 'published',
+              reportCount: Number(item.report_count || item.reportCount || 0),
+              reportReason: item.report_reason || item.reportReason || '',
+              ownershipCode: '',
+              image: item.image_url || createIllustrationDataUrl({
+                title: item.title || 'Berita WARTAKITA',
+                tag: articleCategory,
+                bgStart: '#0b1f3a',
+                bgEnd: '#1e3a8a',
+                accentColor: '#f97316'
+              })
+            };
+          });
+
+          setArticles(normalizedArticles);
+        }
+
+        if (categoriesResponse.ok && categoriesData.success) {
+          setCategoryRecords(categoriesData.categories || []);
+          setCategories(
+            (categoriesData.categories || []).map((category) => category.name)
+          );
+        }
+      } catch (error) {
+        console.error('Gagal mengambil data WARTAKITA:', error);
       }
-
-      if (categoriesData.success) {
-  setCategoryRecords(categoriesData.categories);
-  setCategories(categoriesData.categories.map((category) => category.name));
-}
-    } catch (error) {
-      console.error('Gagal mengambil data WARTAKITA:', error);
     }
-  }
 
-  loadData();
-}, []);
+    loadData();
+  }, []);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -3143,33 +3187,67 @@ useEffect(() => {
     }
   };
 
-  const handlePublishArticle = (newData) => {
-    const id = 'wk-' + Date.now();
-    const ownershipCode = generateOwnershipCode();
-    const now = new Date();
-    const newArticle = {
-      id,
-      slug: makeSlug(newData.title),
-      title: newData.title,
-      category: newData.category,
-      summary: newData.summary,
-      content: newData.content,
-      author: newData.author,
-      whatsapp: newData.whatsapp,
-      publishedAt: formatIndonesianDate(now),
-      timestamp: now.getTime(),
-      views: 1,
-      isFeatured: false,
-      status: 'published',
-      reportCount: 0,
-      reportReason: '',
-      ownershipCode,
-      image: newData.image
-    };
+  const handlePublishArticle = async (newData) => {
+    try {
+      const selectedCategoryRecord = categoryRecords.find(
+        (item) => item.name === newData.category
+      );
 
-    setArticles((prev) => [newArticle, ...prev]);
-    showToast('Berita berhasil diterbitkan! Simpan kode kepemilikan Anda.');
-    return newArticle;
+      if (!selectedCategoryRecord) {
+        throw new Error('Kategori berita tidak ditemukan. Muat ulang halaman dan coba lagi.');
+      }
+
+      const response = await fetch('/api/articles', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          title: newData.title,
+          content: newData.content,
+          summary: newData.summary,
+          category_id: selectedCategoryRecord.id,
+          author_name: newData.author,
+          author_whatsapp: newData.whatsapp,
+          image_url: ''
+        })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Berita gagal diterbitkan.');
+      }
+
+      const now = new Date();
+      const newArticle = {
+        id: result.article.id,
+        slug: result.article.slug,
+        title: result.article.title || newData.title,
+        category: newData.category,
+        summary: newData.summary,
+        content: newData.content,
+        author: newData.author,
+        whatsapp: newData.whatsapp,
+        publishedAt: formatIndonesianDate(now),
+        timestamp: now.getTime(),
+        views: 0,
+        isFeatured: false,
+        status: result.article.status || 'published',
+        reportCount: 0,
+        reportReason: '',
+        ownershipCode: result.ownership_code,
+        image: newData.image
+      };
+
+      setArticles((prev) => [newArticle, ...prev]);
+      showToast('Berita berhasil diterbitkan! Simpan kode kepemilikan Anda.');
+      return newArticle;
+    } catch (error) {
+      console.error('Gagal menerbitkan berita:', error);
+      showToast(error.message || 'Berita gagal diterbitkan.', 'error');
+      return null;
+    }
   };
 
   const handleUpdateArticle = (articleId, updates) => {
