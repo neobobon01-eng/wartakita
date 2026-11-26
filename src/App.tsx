@@ -2300,88 +2300,69 @@ function ManageMyArticlesView({
  *   simulasi dan tidak boleh dianggap sebagai autentikasi admin sungguhan.
  */
 function AdminLoginView({ onLoginSuccess, onNavigate }) {
-  const [adminEmail, setAdminEmail] = useState('');
-  const [sessionTokenInput, setSessionTokenInput] = useState('');
+  const [configured, setConfigured] = useState(null);
+  const [username, setUsername] = useState('Agusto');
+  const [password, setPassword] = useState('');
+  const [setupSecret, setSetupSecret] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [busy, setBusy] = useState(false);
 
-  const handleSimulateAdminAccess = (e) => {
+  useEffect(() => {
+    fetch('/api/admin/setup')
+      .then((response) => response.json())
+      .then((data) => setConfigured(Boolean(data.success && data.configured)))
+      .catch(() => setErrorMsg('Tidak dapat memeriksa status akun admin. Muat ulang halaman.'));
+  }, []);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!adminEmail.trim() || !sessionTokenInput.trim()) {
-      setErrorMsg('Masukkan identitas petugas dan kode sesi simulasi untuk melanjutkan.');
-      return;
-    }
     setErrorMsg('');
-    onLoginSuccess(adminEmail.trim());
+    setBusy(true);
+    try {
+      const endpoint = configured ? '/api/admin/login' : '/api/admin/setup';
+      const payload = configured
+        ? { username, password }
+        : { username: 'Agusto', password, setup_secret: setupSecret };
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.message || 'Permintaan gagal.');
+      if (configured) {
+        onLoginSuccess(data.username || username);
+      } else {
+        setConfigured(true);
+        setPassword('');
+        setSetupSecret('');
+        setErrorMsg('Akun admin berhasil dibuat. Silakan masukkan password untuk login.');
+      }
+    } catch (error) {
+      setErrorMsg(error.message || 'Terjadi kesalahan.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
     <div className="max-w-md mx-auto bg-white rounded-2xl border border-slate-200 shadow-md p-6 sm:p-8 space-y-5">
       <div className="flex items-center gap-3">
-        <div className="w-11 h-11 rounded-xl bg-[#0b1f3a] text-orange-400 flex items-center justify-center">
-          <Lock className="w-5 h-5" />
-        </div>
-        <div>
-          <h1 className="text-xl font-extrabold text-[#0b1f3a]">Login Admin WARTAKITA</h1>
-          <p className="text-xs text-slate-500">Akses Terpisah dari Pengguna Umum</p>
-        </div>
+        <div className="w-11 h-11 rounded-xl bg-[#0b1f3a] text-orange-400 flex items-center justify-center"><Lock className="w-5 h-5" /></div>
+        <div><h1 className="text-xl font-extrabold text-[#0b1f3a]">{configured ? 'Login Admin WARTAKITA' : 'Buat Akun Admin WARTAKITA'}</h1><p className="text-xs text-slate-500">Autentikasi aman melalui server</p></div>
       </div>
-
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 text-xs text-amber-950 leading-relaxed">
-        <strong>Informasi Prototipe:</strong> Ini adalah halaman simulasi admin tanpa password
-        yang ditanamkan di frontend. Autentikasi admin sungguhan wajib menggunakan sistem
-        autentikasi server/Cloudflare Access/Workers pada produksi.
-      </div>
-
-      {errorMsg && (
-        <div className="bg-red-50 border border-red-200 text-red-800 rounded-xl p-3 text-xs font-semibold">
-          {errorMsg}
-        </div>
+      {configured === null ? <p className="text-sm text-slate-500">Memeriksa status akun admin...</p> : (
+        <>
+          {!configured && <div className="bg-blue-50 border border-blue-200 rounded-xl p-3.5 text-xs text-blue-950">Ini adalah setup awal satu kali. Username admin ditetapkan sebagai <strong>Agusto</strong>. Kode setup hanya digunakan untuk membuat akun pertama.</div>}
+          {errorMsg && <div className="bg-red-50 border border-red-200 text-red-800 rounded-xl p-3 text-xs font-semibold">{errorMsg}</div>}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {configured ? <div><label className="block text-xs font-bold text-[#0b1f3a] mb-1.5">Username Admin</label><input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" required className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm" /></div> : <div><label className="block text-xs font-bold text-[#0b1f3a] mb-1.5">Kode Setup Rahasia</label><input type="password" value={setupSecret} onChange={(e) => setSetupSecret(e.target.value)} autoComplete="off" required className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm" /></div>}
+            <div><label className="block text-xs font-bold text-[#0b1f3a] mb-1.5">{configured ? 'Password' : 'Buat Password (minimal 12 karakter)'}</label><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={configured ? 'current-password' : 'new-password'} minLength={12} required className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm" /></div>
+            <button type="submit" disabled={busy} className="w-full py-3 rounded-xl bg-[#0b1f3a] hover:bg-[#13335e] disabled:opacity-60 text-white text-sm font-bold transition">{busy ? 'Memproses...' : configured ? 'Masuk ke Dashboard Admin' : 'Buat Akun Admin'}</button>
+          </form>
+        </>
       )}
-
-      <form onSubmit={handleSimulateAdminAccess} className="space-y-4">
-        <div>
-          <label className="block text-xs font-bold text-[#0b1f3a] mb-1.5">
-            ID / Email Petugas Moderasi
-          </label>
-          <input
-            type="text"
-            value={adminEmail}
-            onChange={(e) => setAdminEmail(e.target.value)}
-            placeholder="Contoh: moderator@wartakita.id"
-            required
-            className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-          />
-        </div>
-
-        <div>
-          <label className="block text-xs font-bold text-[#0b1f3a] mb-1.5">
-            Kode Sesi Simulasi Prototipe
-          </label>
-          <input
-            type="password"
-            value={sessionTokenInput}
-            onChange={(e) => setSessionTokenInput(e.target.value)}
-            placeholder="Masukkan kode sesi uji coba bebas"
-            required
-            className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-          />
-        </div>
-
-        <button
-          type="submit"
-          className="w-full py-3 rounded-xl bg-[#0b1f3a] hover:bg-[#13335e] text-white text-sm font-bold transition"
-        >
-          Masuk ke Dashboard Simulasi Admin
-        </button>
-      </form>
-
-      <button
-        type="button"
-        onClick={() => onNavigate('home')}
-        className="w-full text-center text-xs font-semibold text-slate-600 hover:text-[#0b1f3a]"
-      >
-        Kembali ke Halaman Utama
-      </button>
+      <button type="button" onClick={() => onNavigate('home')} className="w-full text-center text-xs font-semibold text-slate-600 hover:text-[#0b1f3a]">Kembali ke Halaman Utama</button>
     </div>
   );
 }
@@ -3166,6 +3147,18 @@ export default function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [adminUser, setAdminUser] = useState('');
+
+  useEffect(() => {
+    fetch('/api/admin/session')
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.success && data.authenticated) {
+          setIsAdminAuthenticated(true);
+          setAdminUser(data.username || 'Agusto');
+        }
+      })
+      .catch(() => {});
+  }, []);
   const [toast, setToast] = useState(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
 
@@ -3500,7 +3493,7 @@ export default function App() {
               setIsAdminAuthenticated(true);
               setAdminUser(userLabel);
               setActiveView('admin-dashboard');
-              showToast(`Masuk ke Dashboard Simulasi Admin sebagai ${userLabel}.`);
+              showToast(`Berhasil masuk sebagai ${userLabel}.`);
             }}
             onNavigate={(v) => navigateTo(v)}
           />
@@ -3517,11 +3510,12 @@ export default function App() {
             onAdminDeleteArticle={handleDeleteArticle}
             onAdminRestoreArticle={handleAdminRestoreArticle}
             onOpenDetail={handleOpenDetail}
-            onLogout={() => {
+            onLogout={async () => {
+              try { await fetch('/api/admin/logout', { method: 'POST' }); } catch {}
               setIsAdminAuthenticated(false);
               setAdminUser('');
               setActiveView('home');
-              showToast('Sesi simulasi admin telah ditutup.');
+              showToast('Sesi admin telah ditutup.');
             }}
           />
         )}
