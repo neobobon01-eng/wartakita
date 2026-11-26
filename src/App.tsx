@@ -2325,13 +2325,25 @@ function AdminLoginView({ onLoginSuccess, onNavigate }) {
         : { username: 'Agusto', password, setup_secret: setupSecret };
       const response = await fetch(endpoint, {
         method: 'POST',
+        credentials: 'include',
+        cache: 'no-store',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.message || 'Permintaan gagal.');
       if (configured) {
-        onLoginSuccess(data.username || username);
+        // Pastikan cookie sesi benar-benar tersimpan dan diterima server.
+        const sessionResponse = await fetch('/api/admin/session', {
+          method: 'GET',
+          credentials: 'include',
+          cache: 'no-store'
+        });
+        const sessionData = await sessionResponse.json();
+        if (!sessionResponse.ok || !sessionData.success || !sessionData.authenticated) {
+          throw new Error('Login diterima, tetapi sesi admin belum terbaca. Periksa cookie sesi pada server.');
+        }
+        onLoginSuccess(sessionData.username || data.username || username);
       } else {
         setConfigured(true);
         setPassword('');
@@ -3149,7 +3161,11 @@ export default function App() {
   const [adminUser, setAdminUser] = useState('');
 
   useEffect(() => {
-    fetch('/api/admin/session')
+    fetch('/api/admin/session', {
+      method: 'GET',
+      credentials: 'include',
+      cache: 'no-store'
+    })
       .then((response) => response.json())
       .then((data) => {
         if (data.success && data.authenticated) {
@@ -3511,7 +3527,7 @@ export default function App() {
             onAdminRestoreArticle={handleAdminRestoreArticle}
             onOpenDetail={handleOpenDetail}
             onLogout={async () => {
-              try { await fetch('/api/admin/logout', { method: 'POST' }); } catch {}
+              try { await fetch('/api/admin/logout', { method: 'POST', credentials: 'include', cache: 'no-store' }); } catch {}
               setIsAdminAuthenticated(false);
               setAdminUser('');
               setActiveView('home');
