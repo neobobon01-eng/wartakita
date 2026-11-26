@@ -1,3 +1,4 @@
+
 function json(data: unknown, status = 200) {
   return Response.json(data, {
     status,
@@ -5,13 +6,9 @@ function json(data: unknown, status = 200) {
   });
 }
 
-async function derivePassword(
-  password: string,
-  salt: Uint8Array,
-  setStage: (value: string) => void
-) {
-  setStage('mengimpor_kunci_password');
+const ITERATIONS = 100000;
 
+async function derivePassword(password: string, salt: Uint8Array) {
   const material = await crypto.subtle.importKey(
     'raw',
     new TextEncoder().encode(password),
@@ -20,14 +17,12 @@ async function derivePassword(
     ['deriveBits']
   );
 
-  setStage('menghitung_hash_pbkdf2');
-
   const bits = await crypto.subtle.deriveBits(
     {
       name: 'PBKDF2',
       hash: 'SHA-256',
       salt,
-      iterations: 310000,
+      iterations: ITERATIONS,
     },
     material,
     256
@@ -108,10 +103,10 @@ export async function onRequestPost(context: any) {
 
     stage = 'membuat_hash_password';
 
-    const hash = await derivePassword(password, salt, (value) => {
-  stage = value;
-});
-    const stored = `pbkdf2_sha256$310000$${saltHex}$${hash}`;
+    const hash = await derivePassword(password, salt);
+
+    const stored =
+      `pbkdf2_sha256$${ITERATIONS}$${saltHex}$${hash}`;
 
     stage = 'menyimpan_akun_admin';
 
