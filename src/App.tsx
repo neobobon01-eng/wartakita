@@ -2430,15 +2430,15 @@ function AdminDashboardView({
     }
   }, [articles, editingArticle]);
 
-  const handleSaveAdminEdit = (e) => {
+  const handleSaveAdminEdit = async (e) => {
     e.preventDefault();
     if (!editingArticle) return;
-    onAdminUpdateArticle(editingArticle.id, {
+    const saved = await onAdminUpdateArticle(editingArticle.id, {
       title: editTitle.trim(),
       category: editCategory,
       content: editContent.trim()
     });
-    setEditingArticle(null);
+    if (saved) setEditingArticle(null);
   };
 
   const handleAddCat = (e) => {
@@ -3431,11 +3431,50 @@ export default function App() {
     }
   };
 
-  const handleUpdateArticle = (articleId, updates) => {
-    setArticles((prev) =>
-      prev.map((a) => (a.id === articleId ? { ...a, ...updates } : a))
-    );
-    showToast('Perubahan berita berhasil disimpan.');
+  const handleUpdateArticle = async (articleId, updates) => {
+    try {
+      const selectedCategory = categoryRecords.find(
+        (item) => item.name === updates.category
+      );
+      if (!selectedCategory) {
+        throw new Error('Kategori berita tidak ditemukan. Muat ulang halaman dan coba lagi.');
+      }
+
+      const response = await fetch('/api/admin/articles', {
+        method: 'POST',
+        credentials: 'include',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          article_id: articleId,
+          title: updates.title,
+          content: updates.content,
+          category_id: selectedCategory.id
+        })
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Perubahan berita gagal disimpan.');
+      }
+
+      setArticles((prev) => prev.map((article) =>
+        article.id === articleId
+          ? {
+              ...article,
+              title: result.article.title,
+              content: result.article.content,
+              summary: result.article.summary,
+              category: result.article.category_name
+            }
+          : article
+      ));
+      showToast('Perubahan berita berhasil disimpan ke database D1.');
+      return true;
+    } catch (error) {
+      console.error('Gagal menyimpan edit berita admin:', error);
+      showToast(error.message || 'Perubahan berita gagal disimpan.', 'error');
+      return false;
+    }
   };
 
   const handleDeleteArticle = (articleId, reason = 'Dihapus') => {
