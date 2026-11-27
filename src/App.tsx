@@ -1231,15 +1231,6 @@ function ArticleDetailView({
             </p>
           )}
 
-        {/* Foto Utama */}
-        <div className="w-full max-h-[520px] bg-slate-100 overflow-hidden border-y border-slate-100">
-          <img
-            src={article.image}
-            alt={article.title}
-            className="w-full h-full max-h-[520px] object-cover mx-auto"
-          />
-        </div>
-
           <div className="flex flex-wrap items-center justify-between gap-4 pt-2 pb-4 border-b border-slate-100">
             <div className="flex items-center gap-2.5">
               <div className="w-10 h-10 rounded-full bg-[#0b1f3a] text-white font-bold text-sm flex items-center justify-center">
@@ -1308,6 +1299,15 @@ function ArticleDetailView({
           )}
         </div>
 
+        {/* Foto Utama */}
+        <div className="w-full max-h-[520px] bg-slate-100 overflow-hidden border-y border-slate-100">
+          <img
+            src={article.image}
+            alt={article.title}
+            className="w-full h-full max-h-[520px] object-cover mx-auto"
+          />
+        </div>
+
         {/* Isi Berita */}
         <div className="p-5 sm:p-8 space-y-5">
           <div className="space-y-4 text-slate-800 text-base leading-relaxed">
@@ -1370,40 +1370,6 @@ function ArticleDetailView({
  * HALAMAN TULIS BERITA TANPA MENDAFTAR + PRATINJAU + KONFIRMASI KODE
  * ============================================================================
  */
-async function compressNewsImage(file) {
-  const dataUrl = await new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ''));
-    reader.onerror = () => reject(new Error('Foto tidak dapat dibaca.'));
-    reader.readAsDataURL(file);
-  });
-
-  const image = await new Promise((resolve, reject) => {
-    const preview = new Image();
-    preview.onload = () => resolve(preview);
-    preview.onerror = () => reject(new Error('Format foto tidak dapat diproses.'));
-    preview.src = dataUrl;
-  });
-
-  const maxDimension = 1280;
-  const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
-  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
-  const context = canvas.getContext('2d');
-  if (!context) throw new Error('Perangkat tidak mendukung pemrosesan foto.');
-  context.fillStyle = '#ffffff';
-  context.fillRect(0, 0, canvas.width, canvas.height);
-  context.drawImage(image, 0, 0, canvas.width, canvas.height);
-
-  // D1 membatasi ukuran satu nilai/row hingga 2 MB. Batasi foto jauh di bawahnya.
-  for (const quality of [0.78, 0.68, 0.58, 0.48, 0.38]) {
-    const compressed = canvas.toDataURL('image/jpeg', quality);
-    if (compressed.length <= 460000) return compressed;
-  }
-  throw new Error('Foto terlalu besar setelah dikompresi. Pilih foto lain yang lebih kecil.');
-}
-
 function WriteArticleView({ categories, onPublishArticle, onNavigate, onShowToast }) {
   const [author, setAuthor] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
@@ -1429,31 +1395,25 @@ function WriteArticleView({ categories, onPublishArticle, onNavigate, onShowToas
     };
   }, []);
 
-  const handleImageChange = async (e) => {
+  const handleImageChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
       setFormError('Silakan pilih berkas gambar yang valid (JPG, PNG, atau WebP).');
-      e.target.value = '';
       return;
     }
     if (file.size > 3 * 1024 * 1024) {
       setFormError('Ukuran foto maksimal 3 MB agar nyaman dimuat di perangkat mobile.');
-      e.target.value = '';
       return;
     }
 
-    try {
-      setFormError('Mengoptimalkan foto...');
-      const compressed = await compressNewsImage(file);
-      setImagePreview(compressed);
-      setFormError('');
-    } catch (error) {
-      setImagePreview('');
-      setFormError(error.message || 'Foto gagal diproses. Silakan pilih foto lain.');
-      e.target.value = '';
-    }
+    setFormError('');
+    const reader = new FileReader();
+    reader.onload = () => {
+      setImagePreview(String(reader.result || ''));
+    };
+    reader.readAsDataURL(file);
   };
 
   const validateForm = () => {
@@ -1509,7 +1469,7 @@ function WriteArticleView({ categories, onPublishArticle, onNavigate, onShowToas
           .replace(/\\s+/g, ' ')
           .slice(0, 155) + (content.trim().length > 155 ? '...' : ''),
       content: content.trim(),
-      image: imagePreview
+      image: imagePreview || fallbackImg
     });
 
     if (!created) return;
@@ -1653,17 +1613,17 @@ function WriteArticleView({ categories, onPublishArticle, onNavigate, onShowToas
           <p className="text-xs font-bold uppercase tracking-wider text-orange-300">
             Kode Kepemilikan Berita Anda
           </p>
-          <div className="flex w-full min-w-0 flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/10 rounded-xl p-4 border border-white/15">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/10 rounded-xl p-4 border border-white/15">
             <code
               ref={codeTextRef}
-              className="block w-full min-w-0 max-w-full whitespace-normal break-all [overflow-wrap:anywhere] text-lg sm:text-3xl leading-relaxed font-mono font-extrabold tracking-normal sm:tracking-widest text-orange-300 select-all"
+              className="text-2xl sm:text-3xl font-mono font-extrabold tracking-widest text-orange-300 select-all"
             >
               {publishedConfirmation.ownershipCode}
             </code>
             <button
               type="button"
               onClick={() => handleCopyCode(publishedConfirmation.ownershipCode)}
-              className="inline-flex w-full sm:w-auto items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs sm:text-sm font-bold transition shrink-0"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs sm:text-sm font-bold transition shrink-0"
             >
               {copiedCode ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
               <span>{copiedCode ? 'TERSALIN' : 'SALIN KODE'}</span>
@@ -2759,7 +2719,23 @@ function AdminDashboardView({
                   key={art.id}
                   className="p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4"
                 >
-                  <div className="space-y-1 min-w-0">
+                  <div className="flex items-start gap-3 min-w-0 flex-1">
+                    <div className="w-20 h-16 sm:w-28 sm:h-20 rounded-xl overflow-hidden bg-slate-100 border border-slate-200 shrink-0">
+                      {art.image ? (
+                        <img
+                          src={art.image}
+                          alt={`Foto berita: ${art.title}`}
+                          loading="lazy"
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400">Tanpa foto</div>
+                      )}
+                    </div>
+                    <div className="space-y-1 min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span
                         className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
@@ -2788,6 +2764,7 @@ function AdminDashboardView({
                         Laporan: {art.reportReason}
                       </p>
                     )}
+                    </div>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -3385,7 +3362,7 @@ export default function App() {
           category_id: selectedCategoryRecord.id,
           author_name: newData.author,
           author_whatsapp: newData.whatsapp,
-          image_url: newData.image || ''
+          image_url: ''
         })
       });
 
@@ -3413,7 +3390,7 @@ export default function App() {
         reportCount: 0,
         reportReason: '',
         ownershipCode: result.ownership_code,
-        image: result.article.image_url || newData.image || createIllustrationDataUrl({ title: newData.title, tag: newData.category, bgStart: '#0b1f3a', bgEnd: '#1e3a8a', accentColor: '#f97316' })
+        image: newData.image
       };
 
       setArticles((prev) => [newArticle, ...prev]);
