@@ -2026,6 +2026,7 @@ function ManageMyArticlesView({
   const [editSummary, setEditSummary] = useState('');
   const [editContent, setEditContent] = useState('');
   const [editImage, setEditImage] = useState('');
+  const [editImageChanged, setEditImageChanged] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   const verifiedArticle = useMemo(
@@ -2045,7 +2046,8 @@ function ManageMyArticlesView({
     setEditCategory(art.category);
     setEditSummary(art.summary);
     setEditContent(art.content);
-    setEditImage(art.image);
+    setEditImage(art.image || '');
+    setEditImageChanged(false);
     setConfirmDeleteOpen(false);
   };
 
@@ -2107,17 +2109,59 @@ function ManageMyArticlesView({
   const handleReplaceImage = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      onShowToast('Pilih berkas gambar yang valid.', 'warning');
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      onShowToast('Pilih foto JPG, PNG, atau WebP.', 'warning');
+      e.target.value = '';
       return;
     }
-    if (file.size > 3 * 1024 * 1024) {
-      onShowToast('Ukuran foto maksimal 3 MB.', 'warning');
+    if (file.size > 5 * 1024 * 1024) {
+      onShowToast('Ukuran foto asli maksimal 5 MB.', 'warning');
+      e.target.value = '';
       return;
     }
     const reader = new FileReader();
+    reader.onerror = () => {
+      onShowToast('Foto gagal dibaca. Silakan pilih ulang.', 'error');
+      e.target.value = '';
+    };
     reader.onload = () => {
-      setEditImage(String(reader.result || ''));
+      const image = new Image();
+      image.onerror = () => {
+        onShowToast('Foto tidak dapat dibuka. Silakan pilih foto lain.', 'error');
+        e.target.value = '';
+      };
+      image.onload = () => {
+        try {
+          let maxSide = 1280;
+          let quality = 0.78;
+          let compressed = '';
+          for (let attempt = 0; attempt < 10; attempt += 1) {
+            const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(image.width * scale));
+            canvas.height = Math.max(1, Math.round(image.height * scale));
+            const ctx = canvas.getContext('2d');
+            if (!ctx) throw new Error('Perangkat tidak dapat memproses foto.');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+            compressed = canvas.toDataURL('image/jpeg', quality);
+            if (compressed.length <= 440000) break;
+            if (quality > 0.5) quality -= 0.08;
+            else maxSide = Math.round(maxSide * 0.85);
+          }
+          if (!compressed.startsWith('data:image/jpeg;base64,') || compressed.length > 440000) {
+            throw new Error('Foto masih terlalu besar setelah dikompres. Silakan pilih foto lain.');
+          }
+          setEditImage(compressed);
+          setEditImageChanged(true);
+          onShowToast('Foto pengganti siap disimpan bersama perubahan berita.');
+        } catch (error) {
+          onShowToast(error.message || 'Foto gagal diproses.', 'error');
+          e.target.value = '';
+        }
+      };
+      image.src = String(reader.result || '');
     };
     reader.readAsDataURL(file);
   };
@@ -2136,7 +2180,8 @@ function ManageMyArticlesView({
       title: trimmedTitle,
       category: editCategory,
       summary: editSummary.trim(),
-      content: trimmedContent
+      content: trimmedContent,
+      ...(editImageChanged ? { image_url: editImage } : {})
     }, codeInput.trim().toUpperCase());
 
     if (saved) {
@@ -2145,7 +2190,8 @@ function ManageMyArticlesView({
         title: trimmedTitle,
         category: editCategory,
         summary: editSummary.trim(),
-        content: trimmedContent
+        content: trimmedContent,
+        image: editImageChanged ? editImage : verifiedArticle.image
       };
       loadArticleIntoEditState(refreshed);
     }
@@ -3533,7 +3579,9 @@ export default function App() {
           content: updates.content,
           summary: updates.summary,
           category_id: selectedCategory.id,
-          ...(updates.image_url ? { image_url: updates.image_url } : {})
+          ...(typeof updates.image_url === 'string' && updates.image_url.startsWith('data:image/jpeg;base64,')
+            ? { image_url: updates.image_url }
+            : {})
         })
       });
       const result = await response.json();
@@ -3543,7 +3591,7 @@ export default function App() {
 
       setArticles((prev) => prev.map((article) =>
         article.id === articleId
-          ? { ...article, ...updates, image: article.image }
+          ? { ...article, ...updates, image: updates.image_url || article.image }
           : article
       ));
       showToast('Perubahan berita berhasil disimpan ke database.');
