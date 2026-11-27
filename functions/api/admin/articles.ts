@@ -213,6 +213,63 @@ export async function onRequestPost(context: any) {
   }
 }
 
+export async function onRequestPut(context: any) {
+  try {
+    const admin = await verifyAdmin(context);
+    if (!admin) {
+      return json({
+        success: false,
+        message: 'Sesi admin tidak ditemukan atau sudah berakhir. Silakan login kembali.',
+      }, 401);
+    }
+
+    let body: any;
+    try {
+      body = await context.request.json();
+    } catch {
+      return json({ success: false, message: 'Data pemulihan tidak valid.' }, 400);
+    }
+
+    const articleId = Number(body.article_id);
+    if (!Number.isSafeInteger(articleId) || articleId < 1) {
+      return json({ success: false, message: 'ID berita tidak valid.' }, 400);
+    }
+
+    const existing = await context.env.DB.prepare(
+      'SELECT id, status FROM articles WHERE id = ? LIMIT 1'
+    ).bind(articleId).first<any>();
+
+    if (!existing) {
+      return json({ success: false, message: 'Berita tidak ditemukan.' }, 404);
+    }
+    if (existing.status !== 'deleted') {
+      return json({
+        success: false,
+        message: 'Berita ini tidak berstatus terhapus sehingga tidak perlu dipulihkan.',
+      }, 409);
+    }
+
+    const result = await context.env.DB.prepare(`
+      UPDATE articles
+      SET status = 'published', updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND status = 'deleted'
+    `).bind(articleId).run();
+
+    if (!result.success || (result.meta?.changes ?? 1) < 1) {
+      throw new Error('Database gagal memulihkan status berita.');
+    }
+
+    return json({
+      success: true,
+      message: 'Berita berhasil dipulihkan dan diterbitkan kembali.',
+      article_id: articleId,
+      status: 'published',
+    });
+  } catch (error) {
+    console.error('ADMIN ARTICLES PUT ERROR:', error);
+    return json({ success: false, message: 'Gagal memulihkan berita ke database.' }, 500);
+  }
+}
 
 export async function onRequestDelete(context: any) {
   try {
