@@ -2500,6 +2500,8 @@ function AdminDashboardView({
   adminUser,
   articles,
   categories,
+  adminRefreshKey,
+  onRefreshData,
   onAddCategory,
   onRemoveCategory,
   onAdminUpdateArticle,
