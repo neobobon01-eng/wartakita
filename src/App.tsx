@@ -1203,6 +1203,28 @@ function ArticleDetailView({
       </button>
 
       <article className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        {/* Foto utama selalu ditampilkan di bagian paling atas detail berita */}
+        <div className="w-full bg-slate-100 border-b border-slate-100 overflow-hidden">
+          <img
+            src={article.image}
+            alt={article.title}
+            className="block w-full aspect-[16/9] object-cover"
+            loading="eager"
+            onError={(event) => {
+              const imageElement = event.currentTarget;
+              if (imageElement.dataset.fallbackApplied === 'true') return;
+              imageElement.dataset.fallbackApplied = 'true';
+              imageElement.src = createIllustrationDataUrl({
+                title: article.title || 'Berita WARTAKITA',
+                tag: article.category || 'Berita Warga',
+                bgStart: '#0b1f3a',
+                bgEnd: '#1e3a8a',
+                accentColor: '#f97316'
+              });
+            }}
+          />
+        </div>
+
         <div className="p-5 sm:p-8 space-y-4">
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -1297,15 +1319,6 @@ function ArticleDetailView({
               </div>
             </form>
           )}
-        </div>
-
-        {/* Foto Utama */}
-        <div className="w-full max-h-[520px] bg-slate-100 overflow-hidden border-y border-slate-100">
-          <img
-            src={article.image}
-            alt={article.title}
-            className="w-full h-full max-h-[520px] object-cover mx-auto"
-          />
         </div>
 
         {/* Isi Berita */}
@@ -2500,7 +2513,7 @@ function AdminDashboardView({
         <div>
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-500/20 text-orange-300 text-xs font-bold mb-2">
             <ShieldCheck className="w-3.5 h-3.5" />
-            Dashboard Admin (Data Simulasi Prototipe)
+            Dashboard Admin (Sesi Admin Aktif)
           </span>
           <h1 className="text-2xl font-extrabold">Moderasi &amp; Pengelolaan WARTAKITA</h1>
           <p className="text-xs sm:text-sm text-slate-300 mt-1">
@@ -3528,17 +3541,22 @@ export default function App() {
         throw new Error('Kategori berita tidak ditemukan. Muat ulang halaman dan coba lagi.');
       }
 
+      const requestBody = {
+        article_id: articleId,
+        title: updates.title,
+        content: updates.content,
+        category_id: selectedCategory.id,
+        ...(typeof updates.image_url === 'string' && updates.image_url.startsWith('data:image/')
+          ? { image_url: updates.image_url }
+          : {})
+      };
+
       const response = await fetch('/api/admin/articles', {
         method: 'POST',
         credentials: 'include',
         cache: 'no-store',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          article_id: articleId,
-          title: updates.title,
-          content: updates.content,
-          category_id: selectedCategory.id
-        })
+        body: JSON.stringify(requestBody)
       });
       const result = await response.json();
       if (!response.ok || !result.success) {
@@ -3553,7 +3571,7 @@ export default function App() {
               content: result.article.content,
               summary: result.article.summary,
               category: result.article.category_name,
-              ...(result.article.image_url ? { image: result.article.image_url } : {})
+              image: result.article.image_url || article.image
             }
           : article
       ));
