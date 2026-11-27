@@ -3056,8 +3056,107 @@ const pendingReportCount = adminReports.filter(
             ))}
           </div>
         </div>
-      ) : (
-        /* Daftar Berita untuk Moderasi Admin */
+      ) : activeTab === 'reports' ? (
+  <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+    <div>
+      <h2 className="text-lg font-extrabold text-[#0b1f3a]">
+        Laporan Pembaca
+      </h2>
+      <p className="text-sm text-slate-500">
+        Daftar laporan yang dikirim oleh pembaca untuk diperiksa admin.
+      </p>
+    </div>
+
+    {reportsLoading ? (
+      <p className="text-sm text-slate-500">Memuat laporan pembaca...</p>
+    ) : reportsError ? (
+      <div className="rounded-xl bg-red-50 border border-red-200 p-4">
+        <p className="text-sm text-red-700">{reportsError}</p>
+        <button
+          type="button"
+          onClick={onRefreshData}
+          className="mt-3 px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-bold"
+        >
+          Coba Lagi
+        </button>
+      </div>
+    ) : adminReports.length === 0 ? (
+      <p className="text-sm text-slate-500">
+        Belum ada laporan pembaca.
+      </p>
+    ) : (
+      <div className="space-y-3">
+        {adminReports.map((report) => (
+          <div
+            key={report.id}
+            className="border border-slate-200 rounded-xl p-4 space-y-3"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="font-bold text-[#0b1f3a]">
+                {report.article_title || `Berita ID ${report.article_id}`}
+              </h3>
+
+              <span
+                className={`text-xs font-bold px-3 py-1 rounded-full ${
+                  report.status === 'pending'
+                    ? 'bg-amber-100 text-amber-800'
+                    : 'bg-green-100 text-green-800'
+                }`}
+              >
+                {report.status === 'pending'
+                  ? 'Menunggu Pemeriksaan'
+                  : 'Sudah Diperiksa'}
+              </span>
+            </div>
+
+            <div className="text-sm text-slate-700 space-y-1">
+              <p>
+                <strong>Alasan laporan:</strong> {report.reason || '-'}
+              </p>
+
+              {report.description && (
+                <p>
+                  <strong>Detail laporan:</strong> {report.description}
+                </p>
+              )}
+
+              {report.reporter_name && (
+                <p>
+                  <strong>Nama pelapor:</strong> {report.reporter_name}
+                </p>
+              )}
+
+              {report.reporter_whatsapp && (
+                <p>
+                  <strong>WhatsApp:</strong> {report.reporter_whatsapp}
+                </p>
+              )}
+
+              <p>
+                <strong>Tanggal laporan:</strong>{' '}
+                {report.created_at || '-'}
+              </p>
+            </div>
+
+            {report.status === 'pending' && (
+              <button
+                type="button"
+                disabled={updatingReportId === report.id}
+                onClick={() => handleMarkReportReviewed(report.id)}
+                className="px-4 py-2 rounded-lg bg-[#0b1f3a] text-white text-sm font-bold disabled:opacity-50"
+              >
+                {updatingReportId === report.id
+                  ? 'Memproses...'
+                  : 'Tandai Sudah Diperiksa'}
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    )}
+  </div>
+) : (
+  /* Daftar Berita untuk Moderasi Admin */
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
           <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
