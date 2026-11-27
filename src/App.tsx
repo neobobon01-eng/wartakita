@@ -1412,19 +1412,66 @@ function WriteArticleView({ categories, onPublishArticle, onNavigate, onShowToas
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      setFormError('Silakan pilih berkas gambar yang valid (JPG, PNG, atau WebP).');
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setFormError('Silakan pilih foto JPG, PNG, atau WebP.');
+      e.target.value = '';
       return;
     }
-    if (file.size > 3 * 1024 * 1024) {
-      setFormError('Ukuran foto maksimal 3 MB agar nyaman dimuat di perangkat mobile.');
+    if (file.size > 5 * 1024 * 1024) {
+      setFormError('Ukuran foto asli maksimal 5 MB. Foto akan dikompres otomatis sebelum dikirim.');
+      e.target.value = '';
       return;
     }
 
     setFormError('');
     const reader = new FileReader();
+    reader.onerror = () => {
+      setFormError('Foto gagal dibaca. Silakan pilih ulang.');
+      e.target.value = '';
+    };
     reader.onload = () => {
-      setImagePreview(String(reader.result || ''));
+      const image = new Image();
+      image.onerror = () => {
+        setFormError('Foto tidak dapat dibuka. Silakan pilih foto JPG, PNG, atau WebP lainnya.');
+        e.target.value = '';
+      };
+      image.onload = () => {
+        try {
+          // API /api/articles menerima JPEG data URL maksimal 460.000 karakter.
+          // Kompresi dilakukan di perangkat agar foto tidak membebani database D1.
+          let maxSide = 1280;
+          let quality = 0.78;
+          let compressed = '';
+
+          for (let attempt = 0; attempt < 10; attempt += 1) {
+            const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(image.width * scale));
+            canvas.height = Math.max(1, Math.round(image.height * scale));
+            const ctx = canvas.getContext('2d');
+            if (!ctx) throw new Error('Perangkat tidak dapat memproses foto.');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+            compressed = canvas.toDataURL('image/jpeg', quality);
+            if (compressed.length <= 440000) break;
+            if (quality > 0.5) {
+              quality -= 0.08;
+            } else {
+              maxSide = Math.round(maxSide * 0.85);
+            }
+          }
+
+          if (!compressed || compressed.length > 440000 || !compressed.startsWith('data:image/jpeg;base64,')) {
+            throw new Error('Foto masih terlalu besar setelah dikompres. Silakan pilih foto lain.');
+          }
+          setImagePreview(compressed);
+        } catch (error) {
+          setFormError(error.message || 'Foto gagal diproses. Silakan pilih ulang.');
+          e.target.value = '';
+        }
+      };
+      image.src = String(reader.result || '');
     };
     reader.readAsDataURL(file);
   };
@@ -3425,7 +3472,7 @@ export default function App() {
           category_id: selectedCategoryRecord.id,
           author_name: newData.author,
           author_whatsapp: newData.whatsapp,
-          image_url: ''
+          image_url: (typeof newData.image === 'string' && newData.image.startsWith('data:image/jpeg;base64,') && newData.image.length <= 460000) ? newData.image : ''
         })
       });
 
