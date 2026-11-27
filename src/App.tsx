@@ -2659,6 +2659,49 @@ function AdminDashboardView({
     [articles]
   );
 
+  const handleMarkReportReviewed = async (reportId) => {
+  setUpdatingReportId(reportId);
+
+  try {
+    const response = await fetch('/api/admin/reports', {
+      method: 'PATCH',
+      credentials: 'include',
+      cache: 'no-store',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        report_id: reportId
+      })
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error(
+        result.message || 'Gagal memperbarui status laporan.'
+      );
+    }
+
+    setAdminReports((previous) =>
+      previous.map((report) =>
+        Number(report.id) === Number(reportId)
+          ? { ...report, status: 'reviewed' }
+          : report
+      )
+    );
+
+    alert(result.message || 'Laporan berhasil ditandai sudah diperiksa.');
+  } catch (error) {
+    alert(error.message || 'Gagal memperbarui status laporan.');
+  } finally {
+    setUpdatingReportId(null);
+  }
+};
+
+const pendingReportCount = adminReports.filter(
+  (report) => report.status === 'pending'
+).length;
   const visibleArticles = useMemo(() => {
     if (activeTab === 'review') return needsReviewArticles;
     if (activeTab === 'deleted') return articles.filter((a) => a.status === 'deleted');
