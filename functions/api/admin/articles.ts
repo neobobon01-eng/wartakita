@@ -212,3 +212,54 @@ export async function onRequestPost(context: any) {
     }, 500);
   }
 }
+
+
+export async function onRequestDelete(context: any) {
+  try {
+    const admin = await verifyAdmin(context);
+    if (!admin) {
+      return json({
+        success: false,
+        message: 'Sesi admin tidak ditemukan atau sudah berakhir. Silakan login kembali.',
+      }, 401);
+    }
+
+    let body: any;
+    try {
+      body = await context.request.json();
+    } catch {
+      return json({ success: false, message: 'Data permintaan penghapusan tidak valid.' }, 400);
+    }
+
+    const articleId = Number(body.article_id);
+    if (!Number.isSafeInteger(articleId) || articleId < 1) {
+      return json({ success: false, message: 'ID berita tidak valid.' }, 400);
+    }
+
+    const existing = await context.env.DB.prepare(
+      'SELECT id, status FROM articles WHERE id = ? LIMIT 1'
+    ).bind(articleId).first<any>();
+
+    if (!existing) {
+      return json({ success: false, message: 'Berita tidak ditemukan.' }, 404);
+    }
+
+    const result = await context.env.DB.prepare(
+      `UPDATE articles SET status = 'deleted', updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+    ).bind(articleId).run();
+
+    if (!result.success) {
+      throw new Error('Database gagal memperbarui status berita.');
+    }
+
+    return json({
+      success: true,
+      message: 'Berita berhasil dihapus dari publikasi dan dipindahkan ke daftar Berita Dihapus.',
+      article_id: articleId,
+      status: 'deleted',
+    });
+  } catch (error) {
+    console.error('ADMIN ARTICLES DELETE ERROR:', error);
+    return json({ success: false, message: 'Gagal menghapus berita dari database.' }, 500);
+  }
+}
