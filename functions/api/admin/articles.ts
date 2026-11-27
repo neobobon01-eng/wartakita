@@ -119,6 +119,10 @@ export async function onRequestPost(context: any) {
     const categoryId = Number(body.category_id);
     const title = typeof body.title === 'string' ? body.title.trim() : '';
     const content = typeof body.content === 'string' ? body.content.trim() : '';
+    const hasNewImage = Object.prototype.hasOwnProperty.call(body, 'image_url');
+    const imageUrl = hasNewImage && typeof body.image_url === 'string'
+      ? body.image_url
+      : '';
 
     if (!Number.isSafeInteger(articleId) || articleId < 1) {
       return json({ success: false, message: 'ID berita tidak valid.' }, 400);
@@ -133,6 +137,16 @@ export async function onRequestPost(context: any) {
       return json({ success: false, message: 'Kategori berita tidak valid.' }, 400);
     }
 
+    if (hasNewImage) {
+      const validImage = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/.test(imageUrl);
+      if (!validImage) {
+        return json({ success: false, message: 'Format foto tidak valid. Gunakan JPG, PNG, atau WebP.' }, 400);
+      }
+      if (imageUrl.length > 1400000) {
+        return json({ success: false, message: 'Ukuran foto terlalu besar setelah diproses. Pilih foto yang lebih kecil.' }, 413);
+      }
+    }
+
     const category = await context.env.DB.prepare(`
       SELECT id, name FROM categories WHERE id = ? LIMIT 1
     `).bind(categoryId).first<any>();
@@ -142,7 +156,7 @@ export async function onRequestPost(context: any) {
     }
 
     const existing = await context.env.DB.prepare(`
-      SELECT id FROM articles WHERE id = ? LIMIT 1
+      SELECT id, image_url FROM articles WHERE id = ? LIMIT 1
     `).bind(articleId).first<any>();
 
     if (!existing) {
@@ -150,15 +164,26 @@ export async function onRequestPost(context: any) {
     }
 
     const summary = content.replace(/\s+/g, ' ').slice(0, 180);
-    const update = await context.env.DB.prepare(`
-      UPDATE articles
-      SET title = ?,
-          content = ?,
-          summary = ?,
-          category_id = ?,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).bind(title, content, summary, categoryId, articleId).run();
+    const update = hasNewImage
+      ? await context.env.DB.prepare(`
+          UPDATE articles
+          SET title = ?,
+              content = ?,
+              summary = ?,
+              category_id = ?,
+              image_url = ?,
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).bind(title, content, summary, categoryId, imageUrl, articleId).run()
+      : await context.env.DB.prepare(`
+          UPDATE articles
+          SET title = ?,
+              content = ?,
+              summary = ?,
+              category_id = ?,
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).bind(title, content, summary, categoryId, articleId).run();
 
     if (!update.success) {
       throw new Error('Database tidak berhasil menyimpan perubahan berita.');
@@ -166,7 +191,9 @@ export async function onRequestPost(context: any) {
 
     return json({
       success: true,
-      message: 'Perubahan berita berhasil disimpan ke database.',
+      message: hasNewImage
+        ? 'Perubahan berita dan foto berhasil disimpan ke database.'
+        : 'Perubahan berita berhasil disimpan ke database.',
       article: {
         id: articleId,
         title,
@@ -174,6 +201,7 @@ export async function onRequestPost(context: any) {
         summary,
         category_id: categoryId,
         category_name: category.name,
+        image_url: hasNewImage ? imageUrl : (existing.image_url || ''),
       },
     });
   } catch (error) {
