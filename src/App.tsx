@@ -3629,15 +3629,32 @@ export default function App() {
     showToast('Laporan berita telah dikirim untuk diperiksa tim moderasi.');
   };
 
-  const handleAdminRestoreArticle = (articleId) => {
-    setArticles((prev) =>
-      prev.map((a) =>
-        a.id === articleId
-          ? { ...a, status: 'published', reportCount: 0, reportReason: '' }
-          : a
-      )
-    );
-    showToast('Berita dipulihkan ke daftar terbit.');
+  const handleAdminRestoreArticle = async (articleId) => {
+    try {
+      const response = await fetch('/api/admin/articles', {
+        method: 'PUT',
+        credentials: 'include',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ article_id: articleId })
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Berita gagal dipulihkan dari database.');
+      }
+
+      setArticles((prev) => prev.map((article) =>
+        article.id === articleId
+          ? { ...article, status: 'published', reportCount: 0, reportReason: '' }
+          : article
+      ));
+      showToast(result.message || 'Berita berhasil dipulihkan dan diterbitkan kembali.');
+      return true;
+    } catch (error) {
+      console.error('Gagal memulihkan berita admin:', error);
+      showToast(error.message || 'Berita gagal dipulihkan.', 'error');
+      return false;
+    }
   };
 
   const handleAddCategory = (catName) => {
