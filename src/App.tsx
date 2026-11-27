@@ -2629,7 +2629,7 @@ function AdminDashboardView({
         <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
           <button
             type="button"
-            onClick={() => window.location.reload()}
+            onClick={() => setAdminRefreshKey((current) => current + 1)}
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs sm:text-sm font-semibold transition"
           >
             <span>Muat Ulang Data</span>
@@ -3391,6 +3391,7 @@ export default function App() {
 
   // Muat seluruh berita dari API khusus admin setelah sesi terverifikasi.
   // Endpoint ini mengambil data langsung dari D1, termasuk status moderasi.
+  const [adminRefreshKey, setAdminRefreshKey] = useState(0);
   useEffect(() => {
     if (!isAdminAuthenticated) return;
 
@@ -3454,7 +3455,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [isAdminAuthenticated]);
+  }, [isAdminAuthenticated, adminRefreshKey]);
   const [toast, setToast] = useState(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
 
