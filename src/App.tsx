@@ -3584,15 +3584,34 @@ export default function App() {
     }
   };
 
-  const handleDeleteArticle = (articleId, reason = 'Dihapus') => {
-    setArticles((prev) =>
-      prev.map((a) =>
-        a.id === articleId
-          ? { ...a, status: 'deleted', reportReason: reason }
-          : a
-      )
-    );
-    showToast('Berita berhasil dihapus.');
+  const handleDeleteArticle = async (articleId, reason = 'Dihapus oleh admin') => {
+    try {
+      const response = await fetch('/api/admin/articles', {
+        method: 'DELETE',
+        credentials: 'include',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ article_id: articleId, reason })
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Berita gagal dihapus dari database.');
+      }
+
+      setArticles((prev) =>
+        prev.map((article) =>
+          article.id === articleId
+            ? { ...article, status: 'deleted', reportReason: reason }
+            : article
+        )
+      );
+      showToast(result.message || 'Berita berhasil dihapus dari database.');
+      return true;
+    } catch (error) {
+      console.error('Gagal menghapus berita admin:', error);
+      showToast(error.message || 'Berita gagal dihapus.', 'error');
+      return false;
+    }
   };
 
   const handleReportArticle = (articleId, reason) => {
