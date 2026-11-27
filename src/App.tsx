@@ -1231,6 +1231,15 @@ function ArticleDetailView({
             </p>
           )}
 
+        {/* Foto Utama */}
+        <div className="w-full max-h-[520px] bg-slate-100 overflow-hidden border-y border-slate-100">
+          <img
+            src={article.image}
+            alt={article.title}
+            className="w-full h-full max-h-[520px] object-cover mx-auto"
+          />
+        </div>
+
           <div className="flex flex-wrap items-center justify-between gap-4 pt-2 pb-4 border-b border-slate-100">
             <div className="flex items-center gap-2.5">
               <div className="w-10 h-10 rounded-full bg-[#0b1f3a] text-white font-bold text-sm flex items-center justify-center">
@@ -1299,15 +1308,6 @@ function ArticleDetailView({
           )}
         </div>
 
-        {/* Foto Utama */}
-        <div className="w-full max-h-[520px] bg-slate-100 overflow-hidden border-y border-slate-100">
-          <img
-            src={article.image}
-            alt={article.title}
-            className="w-full h-full max-h-[520px] object-cover mx-auto"
-          />
-        </div>
-
         {/* Isi Berita */}
         <div className="p-5 sm:p-8 space-y-5">
           <div className="space-y-4 text-slate-800 text-base leading-relaxed">
@@ -1370,6 +1370,40 @@ function ArticleDetailView({
  * HALAMAN TULIS BERITA TANPA MENDAFTAR + PRATINJAU + KONFIRMASI KODE
  * ============================================================================
  */
+async function compressNewsImage(file) {
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('Foto tidak dapat dibaca.'));
+    reader.readAsDataURL(file);
+  });
+
+  const image = await new Promise((resolve, reject) => {
+    const preview = new Image();
+    preview.onload = () => resolve(preview);
+    preview.onerror = () => reject(new Error('Format foto tidak dapat diproses.'));
+    preview.src = dataUrl;
+  });
+
+  const maxDimension = 1280;
+  const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Perangkat tidak mendukung pemrosesan foto.');
+  context.fillStyle = '#ffffff';
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+  // D1 membatasi ukuran satu nilai/row hingga 2 MB. Batasi foto jauh di bawahnya.
+  for (const quality of [0.78, 0.68, 0.58, 0.48, 0.38]) {
+    const compressed = canvas.toDataURL('image/jpeg', quality);
+    if (compressed.length <= 460000) return compressed;
+  }
+  throw new Error('Foto terlalu besar setelah dikompresi. Pilih foto lain yang lebih kecil.');
+}
+
 function WriteArticleView({ categories, onPublishArticle, onNavigate, onShowToast }) {
   const [author, setAuthor] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
@@ -1395,25 +1429,31 @@ function WriteArticleView({ categories, onPublishArticle, onNavigate, onShowToas
     };
   }, []);
 
-  const handleImageChange = (e) => {
+  const handleImageChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
       setFormError('Silakan pilih berkas gambar yang valid (JPG, PNG, atau WebP).');
+      e.target.value = '';
       return;
     }
     if (file.size > 3 * 1024 * 1024) {
       setFormError('Ukuran foto maksimal 3 MB agar nyaman dimuat di perangkat mobile.');
+      e.target.value = '';
       return;
     }
 
-    setFormError('');
-    const reader = new FileReader();
-    reader.onload = () => {
-      setImagePreview(String(reader.result || ''));
-    };
-    reader.readAsDataURL(file);
+    try {
+      setFormError('Mengoptimalkan foto...');
+      const compressed = await compressNewsImage(file);
+      setImagePreview(compressed);
+      setFormError('');
+    } catch (error) {
+      setImagePreview('');
+      setFormError(error.message || 'Foto gagal diproses. Silakan pilih foto lain.');
+      e.target.value = '';
+    }
   };
 
   const validateForm = () => {
@@ -1469,7 +1509,7 @@ function WriteArticleView({ categories, onPublishArticle, onNavigate, onShowToas
           .replace(/\\s+/g, ' ')
           .slice(0, 155) + (content.trim().length > 155 ? '...' : ''),
       content: content.trim(),
-      image: imagePreview || fallbackImg
+      image: imagePreview
     });
 
     if (!created) return;
@@ -3345,7 +3385,7 @@ export default function App() {
           category_id: selectedCategoryRecord.id,
           author_name: newData.author,
           author_whatsapp: newData.whatsapp,
-          image_url: ''
+          image_url: newData.image || ''
         })
       });
 
@@ -3373,7 +3413,7 @@ export default function App() {
         reportCount: 0,
         reportReason: '',
         ownershipCode: result.ownership_code,
-        image: newData.image
+        image: result.article.image_url || newData.image || createIllustrationDataUrl({ title: newData.title, tag: newData.category, bgStart: '#0b1f3a', bgEnd: '#1e3a8a', accentColor: '#f97316' })
       };
 
       setArticles((prev) => [newArticle, ...prev]);
