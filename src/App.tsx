@@ -2899,6 +2899,18 @@ const pendingReportCount = adminReports.filter(
         >
           Kelola Kategori ({categories.length})
         </button>
+
+        <button
+  type="button"
+  onClick={() => setActiveTab('reports')}
+  className={`px-4 py-2 rounded-xl text-sm font-bold transition-colors ${
+    activeTab === 'reports'
+      ? 'bg-orange-500 text-white'
+      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+  }`}
+>
+  Laporan Pembaca ({pendingReportCount})
+</button>
       </div>
 
       {/* Modal/Panel Edit Berita oleh Admin */}
