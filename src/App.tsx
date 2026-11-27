@@ -2518,6 +2518,89 @@ function AdminDashboardView({
   const [newCategoryName, setNewCategoryName] = useState('');
   const [moderationNote, setModerationNote] = useState('');
 
+  const [reports, setReports] = useState([]);
+  const [reportsLoading, setReportsLoading] = useState(false);
+  const [reportsError, setReportsError] = useState('');
+  const [reportsRefreshKey, setReportsRefreshKey] = useState(0);
+  const [updatingReportId, setUpdatingReportId] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadReports() {
+      setReportsLoading(true);
+      setReportsError('');
+
+      try {
+        const response = await fetch('/api/admin/reports', {
+          method: 'GET',
+          credentials: 'include',
+          cache: 'no-store'
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          throw new Error(data.message || 'Gagal mengambil laporan pembaca.');
+        }
+
+        if (!cancelled) {
+          setReports(Array.isArray(data.reports) ? data.reports : []);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setReportsError(error.message || 'Gagal memuat laporan pembaca.');
+        }
+      } finally {
+        if (!cancelled) {
+          setReportsLoading(false);
+        }
+      }
+    }
+
+    loadReports();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [reportsRefreshKey]);
+
+  const handleMarkReportReviewed = async (reportId) => {
+    setUpdatingReportId(reportId);
+
+    try {
+      const response = await fetch('/api/admin/reports', {
+        method: 'PATCH',
+        credentials: 'include',
+        cache: 'no-store',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ report_id: reportId })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'Status laporan gagal diperbarui.');
+      }
+
+      setReports((previous) =>
+        previous.map((report) =>
+          report.id === reportId
+            ? { ...report, status: 'reviewed' }
+            : report
+        )
+      );
+
+      alert('Laporan berhasil ditandai sudah diperiksa.');
+    } catch (error) {
+      alert(error.message || 'Gagal memperbarui status laporan.');
+    } finally {
+      setUpdatingReportId(null);
+    }
+  };
+
   const totalCount = articles.length;
   const publishedCount = articles.filter((a) => a.status === 'published').length;
   const reportedCount = articles.filter((a) => a.reportCount > 0 && a.status !== 'deleted').length;
