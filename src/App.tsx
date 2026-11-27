@@ -3990,6 +3990,8 @@ export default function App() {
             adminUser={adminUser}
             articles={articles}
             categories={categories}
+            adminRefreshKey={adminRefreshKey}
+            onRefreshData={() => setAdminRefreshKey((current) => current + 1)}
             onAddCategory={handleAddCategory}
             onRemoveCategory={handleRemoveCategory}
             onAdminUpdateArticle={handleUpdateArticle}
