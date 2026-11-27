@@ -1626,10 +1626,10 @@ function WriteArticleView({ categories, onPublishArticle, onNavigate, onShowToas
           <p className="text-xs font-bold uppercase tracking-wider text-orange-300">
             Kode Kepemilikan Berita Anda
           </p>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/10 rounded-xl p-4 border border-white/15">
+          <div className="flex min-w-0 w-full flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/10 rounded-xl p-4 border border-white/15 overflow-hidden">
             <code
               ref={codeTextRef}
-              className="text-2xl sm:text-3xl font-mono font-extrabold tracking-widest text-orange-300 select-all"
+              className="block min-w-0 max-w-full break-all whitespace-normal text-lg sm:text-3xl font-mono font-extrabold tracking-[0.12em] leading-relaxed text-orange-300 select-all"
             >
               {publishedConfirmation.ownershipCode}
             </code>
@@ -2133,14 +2133,14 @@ function ManageMyArticlesView({
           </p>
         </div>
 
-        <form onSubmit={handleCheckCode} className="flex flex-col sm:flex-row gap-3">
+        <form onSubmit={handleCheckCode} className="flex min-w-0 w-full flex-col sm:flex-row gap-3">
           <input
             type="text"
             value={codeInput}
             onChange={(e) => setCodeInput(e.target.value)}
             placeholder="Masukkan kode kepemilikan 32 karakter"
             aria-label="Kode kepemilikan berita"
-            className="flex-1 px-4 py-3 rounded-xl border border-slate-300 font-mono text-sm uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500"
+            className="w-full min-w-0 flex-1 px-4 py-3 rounded-xl border border-slate-300 font-mono text-sm uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500"
           />
           <button
             type="submit"
@@ -3629,32 +3629,15 @@ export default function App() {
     showToast('Laporan berita telah dikirim untuk diperiksa tim moderasi.');
   };
 
-  const handleAdminRestoreArticle = async (articleId) => {
-    try {
-      const response = await fetch('/api/admin/articles', {
-        method: 'PUT',
-        credentials: 'include',
-        cache: 'no-store',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ article_id: articleId })
-      });
-      const result = await response.json();
-      if (!response.ok || !result.success) {
-        throw new Error(result.message || 'Berita gagal dipulihkan dari database.');
-      }
-
-      setArticles((prev) => prev.map((article) =>
-        article.id === articleId
-          ? { ...article, status: 'published', reportCount: 0, reportReason: '' }
-          : article
-      ));
-      showToast(result.message || 'Berita berhasil dipulihkan dan diterbitkan kembali.');
-      return true;
-    } catch (error) {
-      console.error('Gagal memulihkan berita admin:', error);
-      showToast(error.message || 'Berita gagal dipulihkan.', 'error');
-      return false;
-    }
+  const handleAdminRestoreArticle = (articleId) => {
+    setArticles((prev) =>
+      prev.map((a) =>
+        a.id === articleId
+          ? { ...a, status: 'published', reportCount: 0, reportReason: '' }
+          : a
+      )
+    );
+    showToast('Berita dipulihkan ke daftar terbit.');
   };
 
   const handleAddCategory = (catName) => {
