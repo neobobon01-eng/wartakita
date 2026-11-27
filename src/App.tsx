@@ -1653,17 +1653,17 @@ function WriteArticleView({ categories, onPublishArticle, onNavigate, onShowToas
           <p className="text-xs font-bold uppercase tracking-wider text-orange-300">
             Kode Kepemilikan Berita Anda
           </p>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/10 rounded-xl p-4 border border-white/15">
+          <div className="flex w-full min-w-0 flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/10 rounded-xl p-4 border border-white/15">
             <code
               ref={codeTextRef}
-              className="text-2xl sm:text-3xl font-mono font-extrabold tracking-widest text-orange-300 select-all"
+              className="block w-full min-w-0 max-w-full whitespace-normal break-all [overflow-wrap:anywhere] text-lg sm:text-3xl leading-relaxed font-mono font-extrabold tracking-normal sm:tracking-widest text-orange-300 select-all"
             >
               {publishedConfirmation.ownershipCode}
             </code>
             <button
               type="button"
               onClick={() => handleCopyCode(publishedConfirmation.ownershipCode)}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs sm:text-sm font-bold transition shrink-0"
+              className="inline-flex w-full sm:w-auto items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs sm:text-sm font-bold transition shrink-0"
             >
               {copiedCode ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
               <span>{copiedCode ? 'TERSALIN' : 'SALIN KODE'}</span>
