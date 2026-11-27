@@ -2515,6 +2515,48 @@ function AdminDashboardView({
   const [reportsLoading, setReportsLoading] = useState(false);
   const [reportsError, setReportsError] = useState('');
   const [updatingReportId, setUpdatingReportId] = useState(null);
+ useEffect(() => {
+  let cancelled = false;
+
+  async function loadAdminReports() {
+    setReportsLoading(true);
+    setReportsError('');
+
+    try {
+      const response = await fetch('/api/admin/reports', {
+        method: 'GET',
+        credentials: 'include',
+        cache: 'no-store'
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'Gagal mengambil daftar laporan.');
+      }
+
+      if (!cancelled) {
+        setAdminReports(Array.isArray(data.reports) ? data.reports : []);
+      }
+    } catch (error) {
+      if (!cancelled) {
+        setReportsError(
+          error.message || 'Gagal mengambil daftar laporan.'
+        );
+      }
+    } finally {
+      if (!cancelled) {
+        setReportsLoading(false);
+      }
+    }
+  }
+
+  loadAdminReports();
+
+  return () => {
+    cancelled = true;
+  };
+}, [adminRefreshKey]);
   const [editingArticle, setEditingArticle] = useState(null);
   const [editTitle, setEditTitle] = useState('');
   const [editCategory, setEditCategory] = useState('');
