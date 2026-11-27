@@ -1144,6 +1144,7 @@ function ArticleDetailView({
 }) {
   const [reportOpen, setReportOpen] = useState(false);
   const [reportText, setReportText] = useState('');
+  const [reportSubmitting, setReportSubmitting] = useState(false);
 
   if (!article) {
     return (
@@ -1183,12 +1184,21 @@ function ArticleDetailView({
     .map((p) => p.trim())
     .filter(Boolean);
 
-  const handleReportSubmit = (e) => {
+  const handleReportSubmit = async (e) => {
     e.preventDefault();
-    if (!reportText.trim()) return;
-    onReportArticle(article.id, reportText.trim());
-    setReportText('');
-    setReportOpen(false);
+    const reason = reportText.trim();
+    if (!reason || reportSubmitting) return;
+
+    setReportSubmitting(true);
+    try {
+      const submitted = await onReportArticle(article.id, reason);
+      if (submitted) {
+        setReportText('');
+        setReportOpen(false);
+      }
+    } finally {
+      setReportSubmitting(false);
+    }
   };
 
   return (
@@ -1312,9 +1322,10 @@ function ArticleDetailView({
                 </button>
                 <button
                   type="submit"
-                  className="px-3.5 py-1.5 rounded-lg bg-amber-700 hover:bg-amber-800 text-white text-xs font-bold"
+                  disabled={reportSubmitting}
+                  className="px-3.5 py-1.5 rounded-lg bg-amber-700 hover:bg-amber-800 disabled:opacity-60 text-white text-xs font-bold"
                 >
-                  Kirim Laporan
+                  {reportSubmitting ? 'Mengirim...' : 'Kirim Laporan'}
                 </button>
               </div>
             </form>
@@ -2615,14 +2626,23 @@ function AdminDashboardView({
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={onLogout}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs sm:text-sm font-semibold transition self-start sm:self-auto"
-        >
-          <LogOut className="w-4 h-4" />
-          <span>Keluar</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs sm:text-sm font-semibold transition"
+          >
+            <span>Muat Ulang Data</span>
+          </button>
+          <button
+            type="button"
+            onClick={onLogout}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs sm:text-sm font-semibold transition"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Keluar</span>
+          </button>
+        </div>
       </div>
 
       {/* Statistik Utama */}
@@ -3709,19 +3729,39 @@ export default function App() {
     }
   };
 
-  const handleReportArticle = (articleId, reason) => {
-    setArticles((prev) =>
-      prev.map((a) =>
-        a.id === articleId
-          ? {
-              ...a,
-              reportCount: a.reportCount + 1,
-              reportReason: a.reportReason ? `${a.reportReason} | ${reason}` : reason
-            }
-          : a
-      )
-    );
-    showToast('Laporan berita telah dikirim untuk diperiksa tim moderasi.');
+  const handleReportArticle = async (articleId, reason) => {
+    try {
+      const response = await fetch('/api/articles/report', {
+        method: 'POST',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ article_id: articleId, reason })
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Laporan berita gagal disimpan.');
+      }
+
+      setArticles((prev) =>
+        prev.map((a) =>
+          String(a.id) === String(articleId)
+            ? {
+                ...a,
+                reportCount: Number(a.reportCount || 0) + 1,
+                reportReason: a.reportReason ? `${a.reportReason} | ${reason}` : reason
+              }
+            : a
+        )
+      );
+
+      showToast('Laporan berita berhasil disimpan dan dikirim ke tim moderasi.');
+      return true;
+    } catch (error) {
+      console.error('Gagal mengirim laporan berita:', error);
+      showToast(error.message || 'Laporan berita gagal dikirim. Silakan coba lagi.', 'error');
+      return false;
+    }
   };
 
   const handleAdminRestoreArticle = async (articleId) => {
