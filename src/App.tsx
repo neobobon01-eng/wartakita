@@ -2511,6 +2511,10 @@ function AdminDashboardView({
   onLogout
 }) {
   const [activeTab, setActiveTab] = useState('all'); // 'all' | 'review' | 'deleted' | 'categories'
+  const [adminReports, setAdminReports] = useState([]);
+  const [reportsLoading, setReportsLoading] = useState(false);
+  const [reportsError, setReportsError] = useState('');
+  const [updatingReportId, setUpdatingReportId] = useState(null);
   const [editingArticle, setEditingArticle] = useState(null);
   const [editTitle, setEditTitle] = useState('');
   const [editCategory, setEditCategory] = useState('');
