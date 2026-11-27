@@ -1,31 +1,44 @@
 function json(data: unknown, status = 200) {
-  return Response.json(data, { status });
+  return Response.json(data, {
+    status,
+    headers: { 'Cache-Control': 'no-store' },
+  });
 }
 
 async function hashCode(code: string): Promise<string> {
   const data = new TextEncoder().encode(code);
-  const digest = await crypto.subtle.digest("SHA-256", data);
+  const digest = await crypto.subtle.digest('SHA-256', data);
 
   return Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+function validateReplacementImage(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length === 0) return null;
+  if (value.length > 460000) {
+    throw new Error('Ukuran foto terlalu besar. Pilih foto lain yang lebih kecil.');
+  }
+
+  const isJpegDataUrl = /^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(value);
+  const isHttpsUrl = /^https:\/\/[^\s]+$/i.test(value);
+  if (!isJpegDataUrl && !isHttpsUrl) {
+    throw new Error('Format foto tidak valid. Unggah foto JPG, PNG, atau WebP.');
+  }
+  return value;
 }
 
 export async function onRequestPost(context: any) {
   try {
     const body = await context.request.json() as Record<string, unknown>;
-    const action = String(body.action || "").trim();
-    const ownershipCode = String(body.ownership_code || "").trim().toUpperCase();
+    const action = String(body.action || '').trim();
+    const ownershipCode = String(body.ownership_code || '').trim().toUpperCase();
 
     if (!/^[A-F0-9]{32}$/.test(ownershipCode)) {
-      return json({
-        success: false,
-        message: "Kode kepemilikan tidak valid."
-      }, 400);
+      return json({ success: false, message: 'Kode kepemilikan tidak valid.' }, 400);
     }
 
     const ownershipHash = await hashCode(ownershipCode);
-
     // Verifikasi kode dilakukan sepenuhnya di server.
     const ownership = await context.env.DB.prepare(
       `SELECT a.id
@@ -38,13 +51,13 @@ export async function onRequestPost(context: any) {
     if (!ownership) {
       return json({
         success: false,
-        message: "Kode kepemilikan salah atau berita tidak ditemukan."
+        message: 'Kode kepemilikan salah atau berita tidak ditemukan.'
       }, 403);
     }
 
     const articleId = ownership.id;
 
-    if (action === "verify") {
+    if (action === 'verify') {
       const article = await context.env.DB.prepare(
         `SELECT
            a.id,
@@ -66,43 +79,37 @@ export async function onRequestPost(context: any) {
       ).bind(articleId).first();
 
       if (!article) {
-        return json({
-          success: false,
-          message: "Berita tidak ditemukan."
-        }, 404);
+        return json({ success: false, message: 'Berita tidak ditemukan.' }, 404);
       }
 
       return json({
         success: true,
-        message: "Kode kepemilikan berhasil diverifikasi.",
+        message: 'Kode kepemilikan berhasil diverifikasi.',
         article
       });
     }
 
-    if (action === "delete") {
+    if (action === 'delete') {
       const results = await context.env.DB.batch([
         context.env.DB.prepare(
-          "DELETE FROM article_ownership WHERE article_id = ?"
+          'DELETE FROM article_ownership WHERE article_id = ?'
         ).bind(articleId),
         context.env.DB.prepare(
-          "DELETE FROM articles WHERE id = ?"
+          'DELETE FROM articles WHERE id = ?'
         ).bind(articleId)
       ]);
 
       if (!results[0].success || !results[1].success || results[1].meta.changes !== 1) {
-        throw new Error("Penghapusan berita gagal.");
+        throw new Error('Penghapusan berita gagal.');
       }
 
-      return json({
-        success: true,
-        message: "Berita berhasil dihapus."
-      });
+      return json({ success: true, message: 'Berita berhasil dihapus.' });
     }
 
-    if (action === "update") {
-      const title = String(body.title || "").trim();
-      const content = String(body.content || "").trim();
-      const summary = String(body.summary || "").trim();
+    if (action === 'update') {
+      const title = String(body.title || '').trim();
+      const content = String(body.content || '').trim();
+      const summary = String(body.summary || '').trim();
       const categoryId = Number(body.category_id);
 
       if (
@@ -116,55 +123,98 @@ export async function onRequestPost(context: any) {
       ) {
         return json({
           success: false,
-          message: "Data berita tidak valid. Periksa judul, ringkasan, isi, dan kategori."
+          message: 'Data berita tidak valid. Periksa judul, ringkasan, isi, dan kategori.'
         }, 400);
       }
 
       const category = await context.env.DB.prepare(
-        "SELECT id FROM categories WHERE id = ? AND is_active = 1"
+        'SELECT id FROM categories WHERE id = ? AND is_active = 1'
       ).bind(categoryId).first();
 
       if (!category) {
         return json({
           success: false,
-          message: "Kategori tidak ditemukan atau tidak aktif."
+          message: 'Kategori tidak ditemukan atau tidak aktif.'
         }, 400);
       }
 
-      const result = await context.env.DB.prepare(
-        `UPDATE articles
-         SET title = ?,
-             content = ?,
-             summary = ?,
-             category_id = ?,
-             updated_at = CURRENT_TIMESTAMP
-         WHERE id = ?`
-      ).bind(
-        title,
-        content,
-        summary || content.slice(0, 180),
-        categoryId,
-        articleId
-      ).run();
-
-      if (!result.success || result.meta.changes !== 1) {
-        throw new Error("Pembaruan berita gagal.");
+      let replacementImage: string | null = null;
+      try {
+        if (Object.prototype.hasOwnProperty.call(body, 'image_url') && body.image_url !== '') {
+          replacementImage = validateReplacementImage(body.image_url);
+          if (!replacementImage) {
+            return json({ success: false, message: 'Foto pengganti tidak valid.' }, 400);
+          }
+        }
+      } catch (imageError: any) {
+        return json({
+          success: false,
+          message: imageError?.message || 'Foto pengganti tidak valid.'
+        }, 400);
       }
+
+      const statement = replacementImage
+        ? context.env.DB.prepare(
+            `UPDATE articles
+             SET title = ?,
+                 content = ?,
+                 summary = ?,
+                 category_id = ?,
+                 image_url = ?,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?`
+          ).bind(
+            title,
+            content,
+            summary || content.slice(0, 180),
+            categoryId,
+            replacementImage,
+            articleId
+          )
+        : context.env.DB.prepare(
+            `UPDATE articles
+             SET title = ?,
+                 content = ?,
+                 summary = ?,
+                 category_id = ?,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?`
+          ).bind(
+            title,
+            content,
+            summary || content.slice(0, 180),
+            categoryId,
+            articleId
+          );
+
+      const result = await statement.run();
+      if (!result.success || result.meta.changes !== 1) {
+        throw new Error('Pembaruan berita gagal.');
+      }
+
+      const updatedArticle = await context.env.DB.prepare(
+        `SELECT a.id, a.title, a.content, a.summary, a.category_id,
+                c.name AS category_name, a.image_url, a.updated_at
+         FROM articles a
+         LEFT JOIN categories c ON c.id = a.category_id
+         WHERE a.id = ?`
+      ).bind(articleId).first();
 
       return json({
         success: true,
-        message: "Berita berhasil diperbarui."
+        message: 'Berita berhasil diperbarui.',
+        article: updatedArticle
       });
     }
 
     return json({
       success: false,
-      message: "Aksi pengelolaan tidak dikenal."
+      message: 'Aksi pengelolaan tidak dikenal.'
     }, 400);
   } catch (error) {
     return json({
       success: false,
-      message: "Terjadi kesalahan saat mengelola berita."
+      message: 'Terjadi kesalahan saat mengelola berita.'
     }, 500);
   }
 }
