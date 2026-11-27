@@ -2571,32 +2571,52 @@ function AdminDashboardView({
               <X className="w-4 h-4" />
             </button>
           </div>
-          <form onSubmit={handleSaveAdminEdit} className="space-y-3">
-            <input
-              type="text"
-              value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm"
-              required
-            />
-            <select
-              value={editCategory}
-              onChange={(e) => setEditCategory(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-sm"
-            >
-              {categories.map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat}
-                </option>
-              ))}
-            </select>
-            <textarea
-              rows={5}
-              value={editContent}
-              onChange={(e) => setEditContent(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm"
-              required
-            />
+          <form onSubmit={handleSaveAdminEdit} className="space-y-4">
+            <div className="space-y-1.5">
+              <label htmlFor="admin-edit-title" className="block text-sm font-bold text-slate-700">
+                Judul Berita
+              </label>
+              <input
+                id="admin-edit-title"
+                type="text"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                placeholder="Masukkan judul berita"
+                className="w-full px-4 py-3 rounded-xl border border-slate-300 text-sm"
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="admin-edit-category" className="block text-sm font-bold text-slate-700">
+                Kategori Berita
+              </label>
+              <select
+                id="admin-edit-category"
+                value={editCategory}
+                onChange={(e) => setEditCategory(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-sm"
+              >
+                {categories.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="admin-edit-content" className="block text-sm font-bold text-slate-700">
+                Isi Berita
+              </label>
+              <textarea
+                id="admin-edit-content"
+                rows={6}
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                placeholder="Tulis isi berita di sini"
+                className="w-full px-4 py-3 rounded-xl border border-slate-300 text-sm"
+                required
+              />
+            </div>
             <div className="flex justify-end gap-2">
               <button
                 type="button"
