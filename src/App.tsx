@@ -2396,6 +2396,8 @@ function AdminDashboardView({
   const [editTitle, setEditTitle] = useState('');
   const [editCategory, setEditCategory] = useState('');
   const [editContent, setEditContent] = useState('');
+  const [editImage, setEditImage] = useState('');
+  const [editImageChanged, setEditImageChanged] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [moderationNote, setModerationNote] = useState('');
 
@@ -2420,6 +2422,8 @@ function AdminDashboardView({
     setEditTitle(art.title);
     setEditCategory(art.category);
     setEditContent(art.content);
+    setEditImage(art.image || '');
+    setEditImageChanged(false);
   };
 
   useEffect(() => {
@@ -2430,13 +2434,54 @@ function AdminDashboardView({
     }
   }, [articles, editingArticle]);
 
+  const handleAdminImageChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('Pilih berkas gambar yang valid (JPG, PNG, atau WebP).');
+      e.target.value = '';
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Ukuran foto maksimal 5 MB.');
+      e.target.value = '';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = () => alert('Foto gagal dibaca. Silakan pilih ulang.');
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = () => alert('File foto tidak dapat dibuka.');
+      image.onload = () => {
+        const maxSide = 1280;
+        const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { alert('Perangkat tidak dapat memproses foto.'); return; }
+        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+        const compressed = canvas.toDataURL('image/jpeg', 0.76);
+        if (compressed.length > 1400000) {
+          alert('Foto masih terlalu besar setelah diproses. Pilih foto lain yang lebih kecil.');
+          return;
+        }
+        setEditImage(compressed);
+        setEditImageChanged(true);
+      };
+      image.src = String(reader.result || '');
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSaveAdminEdit = async (e) => {
     e.preventDefault();
     if (!editingArticle) return;
     const saved = await onAdminUpdateArticle(editingArticle.id, {
       title: editTitle.trim(),
       category: editCategory,
-      content: editContent.trim()
+      content: editContent.trim(),
+      image_url: editImageChanged ? editImage : undefined
     });
     if (saved) setEditingArticle(null);
   };
@@ -2603,6 +2648,23 @@ function AdminDashboardView({
                 ))}
               </select>
             </div>
+            <div className="space-y-2">
+              <label className="block text-sm font-bold text-slate-700">Foto Berita</label>
+              {editImage ? (
+                <img src={editImage} alt="Pratinjau foto berita" className="w-full max-h-56 object-cover rounded-xl border border-slate-200" />
+              ) : (
+                <div className="w-full h-32 rounded-xl border border-dashed border-slate-300 flex items-center justify-center text-sm text-slate-500">Belum ada foto berita</div>
+              )}
+              <input
+                id="admin-edit-image"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handleAdminImageChange}
+                className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-slate-700"
+              />
+              <p className="text-xs text-slate-500">Pilih foto baru dari galeri HP. Jika tidak memilih foto, foto lama tetap digunakan.</p>
+              {editImageChanged && <p className="text-xs font-semibold text-emerald-700">Foto baru siap disimpan.</p>}
+            </div>
             <div className="space-y-1.5">
               <label htmlFor="admin-edit-content" className="block text-sm font-bold text-slate-700">
                 Isi Berita
@@ -2721,21 +2783,9 @@ function AdminDashboardView({
                 >
                   <div className="flex items-start gap-3 min-w-0 flex-1">
                     <div className="w-20 h-16 sm:w-28 sm:h-20 rounded-xl overflow-hidden bg-slate-100 border border-slate-200 shrink-0">
-                      {art.image ? (
-                        <img
-                          src={art.image}
-                          alt={`Foto berita: ${art.title}`}
-                          loading="lazy"
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                          }}
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400">Tanpa foto</div>
-                      )}
+                      {art.image ? <img src={art.image} alt={`Foto ${art.title}`} loading="lazy" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400">Tanpa foto</div>}
                     </div>
-                    <div className="space-y-1 min-w-0 flex-1">
+                    <div className="space-y-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span
                         className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
@@ -3422,7 +3472,8 @@ export default function App() {
           title: updates.title,
           content: updates.content,
           summary: updates.summary,
-          category_id: selectedCategory.id
+          category_id: selectedCategory.id,
+          ...(updates.image_url ? { image_url: updates.image_url } : {})
         })
       });
       const result = await response.json();
@@ -3501,7 +3552,8 @@ export default function App() {
               title: result.article.title,
               content: result.article.content,
               summary: result.article.summary,
-              category: result.article.category_name
+              category: result.article.category_name,
+              ...(result.article.image_url ? { image: result.article.image_url } : {})
             }
           : article
       ));
