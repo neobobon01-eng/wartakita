@@ -2714,7 +2714,7 @@ function AdminDashboardView({
         <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
           <button
             type="button"
-            onClick={() => setAdminRefreshKey((current) => current + 1)}
+            onClick={onRefreshData}
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs sm:text-sm font-semibold transition"
           >
             <span>Muat Ulang Data</span>
