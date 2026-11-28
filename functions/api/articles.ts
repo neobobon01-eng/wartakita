@@ -69,15 +69,23 @@ export async function onRequestPost(context: any) {
     const imageUrl = String(body.image_url || "").trim();
     const categoryId = Number(body.category_id);
 
-    if (
-      title.length < 10 || title.length > 200 ||
-      content.length < 50 || content.length > 50000 ||
-      summary.length > 500 ||
-      authorName.length < 2 || authorName.length > 100 ||
-      !/^\+?[0-9]{9,16}$/.test(whatsapp) ||
-      !Number.isInteger(categoryId) || categoryId < 1
-    ) {
-      return json({ success: false, message: "Data berita tidak valid. Periksa kembali semua isian." }, 400);
+    const validationErrors: string[] = [];
+    if (authorName.length < 2) validationErrors.push("Nama Penulis: minimal 2 karakter.");
+    if (authorName.length > 100) validationErrors.push("Nama Penulis: maksimal 100 karakter.");
+    if (title.length < 10) validationErrors.push("Judul Berita: minimal 10 karakter.");
+    if (title.length > 200) validationErrors.push("Judul Berita: maksimal 200 karakter.");
+    if (content.length < 50) validationErrors.push("Isi Berita: minimal 50 karakter.");
+    if (content.length > 50000) validationErrors.push("Isi Berita: maksimal 50.000 karakter.");
+    if (summary.length > 500) validationErrors.push("Ringkasan Berita: maksimal 500 karakter.");
+    if (!/^\\+?[0-9]{9,16}$/.test(whatsapp)) validationErrors.push("Nomor WhatsApp: gunakan 9–16 angka, boleh diawali tanda +.");
+    if (!Number.isInteger(categoryId) || categoryId < 1) validationErrors.push("Kategori Berita: wajib dipilih.");
+
+    if (validationErrors.length) {
+      return json({
+        success: false,
+        message: "Berita belum dapat diterbitkan. Perbaiki isian berikut:\\n• " + validationErrors.join("\\n• "),
+        errors: validationErrors
+      }, 400);
     }
 
     // Foto unggahan dikompres di browser menjadi JPEG dan disimpan sebagai data URL.
