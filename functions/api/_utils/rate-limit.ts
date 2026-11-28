@@ -10,7 +10,7 @@ type RateLimitResult = {
 };
 
 /**
- * Membatasi permintaan berdasarkan alamat IP yang diberikan Cloudflare.
+ * Membatasi permintaan berdasarkan alamat IP dari Cloudflare.
  * Hanya hash IP dan nama endpoint yang disimpan di D1.
  */
 export async function checkPublicRateLimit(
@@ -32,7 +32,7 @@ export async function checkPublicRateLimit(
     `INSERT INTO public_api_rate_limits (
        key_hash, attempts, window_started_at, blocked_until, updated_at
      )
-     VALUES (?, 1, NULL, ?, NULL)
+     VALUES (?, 1, ?, NULL, ?)
      ON CONFLICT(key_hash) DO UPDATE SET
        attempts = CASE
          WHEN public_api_rate_limits.blocked_until IS NOT NULL
