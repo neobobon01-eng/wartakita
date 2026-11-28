@@ -50,6 +50,19 @@ export async function onRequestGet(context: any) {
       }, 401);
     }
 
+    const url = new URL(context.request.url);
+    const requestedPage = Number(url.searchParams.get('page') || 1);
+    const page = Number.isSafeInteger(requestedPage) && requestedPage > 0
+      ? Math.min(requestedPage, 1000000)
+      : 1;
+    const limit = 50;
+    const offset = (page - 1) * limit;
+
+    const countResult = await context.env.DB.prepare(
+      'SELECT COUNT(*) AS total FROM articles'
+    ).first<any>();
+    const total = Number(countResult?.total || 0);
+
     const result = await context.env.DB.prepare(`
       SELECT
         a.id,
@@ -82,13 +95,17 @@ export async function onRequestGet(context: any) {
         ) AS report_reason
       FROM articles a
       LEFT JOIN categories c ON c.id = a.category_id
-      ORDER BY a.created_at DESC
-    `).all();
+      ORDER BY a.created_at DESC, a.id DESC
+      LIMIT ? OFFSET ?
+    `).bind(limit, offset).all();
 
     return json({
       success: true,
       username: admin.username,
-      total: result.results.length,
+      page,
+      limit,
+      total,
+      hasMore: offset + result.results.length < total,
       articles: result.results,
     });
   } catch (error) {
