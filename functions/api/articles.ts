@@ -65,7 +65,7 @@ export async function onRequestPost(context: any) {
     const content = String(body.content || "").trim();
     const summary = String(body.summary || "").trim();
     const authorName = String(body.author_name || "").trim();
-    const whatsapp = String(body.author_whatsapp || "").trim();
+    const whatsapp = String(body.author_whatsapp || "").trim().replace(/[\s()-]/g, "");
     const imageUrl = String(body.image_url || "").trim();
     const categoryId = Number(body.category_id);
 
@@ -77,7 +77,7 @@ export async function onRequestPost(context: any) {
     if (content.length < 50) validationErrors.push("Isi Berita: minimal 50 karakter.");
     if (content.length > 50000) validationErrors.push("Isi Berita: maksimal 50.000 karakter.");
     if (summary.length > 500) validationErrors.push("Ringkasan Berita: maksimal 500 karakter.");
-    if (!/^\\+?[0-9]{9,16}$/.test(whatsapp)) validationErrors.push("Nomor WhatsApp: gunakan 9–16 angka, boleh diawali tanda +.");
+    if (!/^\+?[0-9]{9,16}$/.test(whatsapp)) validationErrors.push("Nomor WhatsApp: gunakan 9–16 angka, boleh diawali tanda +.");
     if (!Number.isInteger(categoryId) || categoryId < 1) validationErrors.push("Kategori Berita: wajib dipilih.");
 
     if (validationErrors.length) {
