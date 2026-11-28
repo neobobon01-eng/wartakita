@@ -1,3 +1,5 @@
+import { checkPublicRateLimit } from "../_utils/rate-limit";
+
 function json(data: unknown, status = 200) {
   return Response.json(data, {
     status,
@@ -12,6 +14,37 @@ async function hashCode(code: string): Promise<string> {
   return Array.from(new Uint8Array(digest))
     .map((byte) => byte.toString(16).padStart(2, '0'))
     .join('');
+}
+
+async function checkFailedOwnershipAttempt(context: any): Promise<Response | null> {
+  const ipAddress = context.request.headers.get("CF-Connecting-IP");
+  if (!ipAddress) {
+    return json({ success: false, message: "Permintaan tidak dapat diverifikasi." }, 503);
+  }
+
+  const rateLimit = await checkPublicRateLimit(
+    context.env.DB,
+    ipAddress,
+    "article-manage-failed-code",
+    10,
+    15 * 60,
+    15 * 60
+  );
+
+  if (!rateLimit.allowed) {
+    return Response.json(
+      { success: false, message: "Terlalu banyak percobaan kode kepemilikan. Silakan coba lagi setelah 15 menit." },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(rateLimit.retryAfter),
+          "Cache-Control": "no-store"
+        }
+      }
+    );
+  }
+
+  return null;
 }
 
 function validateReplacementImage(value: unknown): string | null {
@@ -35,6 +68,8 @@ export async function onRequestPost(context: any) {
     const ownershipCode = String(body.ownership_code || '').trim().toUpperCase();
 
     if (!/^[A-F0-9]{32}$/.test(ownershipCode)) {
+      const rateLimitResponse = await checkFailedOwnershipAttempt(context);
+      if (rateLimitResponse) return rateLimitResponse;
       return json({ success: false, message: 'Kode kepemilikan tidak valid.' }, 400);
     }
 
@@ -49,6 +84,8 @@ export async function onRequestPost(context: any) {
     ).bind(ownershipHash).first<{ id: number }>();
 
     if (!ownership) {
+      const rateLimitResponse = await checkFailedOwnershipAttempt(context);
+      if (rateLimitResponse) return rateLimitResponse;
       return json({
         success: false,
         message: 'Kode kepemilikan salah atau berita tidak ditemukan.'
