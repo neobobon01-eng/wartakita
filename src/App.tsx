@@ -349,7 +349,16 @@ function buildArticleUrl(article) {
 
 function buildWhatsAppShareUrl(article) {
   const url = buildArticleUrl(article);
-  const text = `Berita menarik dari WARTAKITA\n${article.title}\nBaca selengkapnya:\n${url}`;
+  // Versi tautan mengikuti isi gambar agar WhatsApp membaca ulang pratinjau
+  // ketika gambar berita diganti, bukan memakai cache gambar lama.
+  const imageSource = String(article.image || '');
+  let imageVersion = 2166136261;
+  for (let i = 0; i < imageSource.length; i++) {
+    imageVersion ^= imageSource.charCodeAt(i);
+    imageVersion = Math.imul(imageVersion, 16777619);
+  }
+  const versionedUrl = `${url}?v=${(imageVersion >>> 0).toString(16)}`;
+  const text = `Berita menarik dari WARTAKITA\n${article.title}\nBaca selengkapnya:\n${versionedUrl}`;
   return `https://wa.me/?text=${encodeURIComponent(text)}`;
 }
 
