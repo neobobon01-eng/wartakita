@@ -109,6 +109,62 @@ export async function onRequestGet(context: any) {
   }
 }
 
+
+ // Menghapus satu catatan laporan saja; berita tidak diubah.
+export async function onRequestDelete(context: any) {
+  if (!isSameOriginRequest(context.request)) {
+    return json({ success: false, message: 'Asal permintaan tidak diizinkan.' }, 403);
+  }
+
+  try {
+    const admin = await verifyAdmin(context);
+    if (!admin) {
+      return json({
+        success: false,
+        message: 'Sesi admin tidak valid. Silakan login kembali.',
+      }, 401);
+    }
+
+    let body: any;
+    try {
+      body = await context.request.json();
+    } catch {
+      return json({ success: false, message: 'Data penghapusan laporan tidak valid.' }, 400);
+    }
+
+    const reportId = Number(body.report_id);
+    if (!Number.isSafeInteger(reportId) || reportId < 1) {
+      return json({ success: false, message: 'ID laporan tidak valid.' }, 400);
+    }
+
+    const existing = await context.env.DB.prepare(
+      'SELECT id FROM article_reports WHERE id = ? LIMIT 1'
+    ).bind(reportId).first<any>();
+
+    if (!existing) {
+      return json({ success: false, message: 'Laporan tidak ditemukan.' }, 404);
+    }
+
+    const result = await context.env.DB.prepare(
+      'DELETE FROM article_reports WHERE id = ?'
+    ).bind(reportId).run();
+
+    if (!result.success || (result.meta?.changes ?? 0) !== 1) {
+      throw new Error('Database gagal menghapus catatan laporan.');
+    }
+
+    return json({
+      success: true,
+      message: 'Catatan laporan berhasil dihapus. Berita tidak diubah.',
+      report_id: reportId,
+    });
+  } catch (error) {
+    console.error('ADMIN REPORTS DELETE ERROR:', error);
+    return json({ success: false, message: 'Gagal menghapus catatan laporan.' }, 500);
+  }
+}
+
+
 // Menandai satu laporan sebagai sudah diperiksa.
 export async function onRequestPatch(context: any) {
   if (!isSameOriginRequest(context.request)) {
