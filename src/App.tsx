@@ -338,12 +338,12 @@ function buildArticleUrl(article) {
   try {
     const rawOrigin = window.location.origin && window.location.origin !== 'null'
       ? window.location.origin
-      : 'https://wartakita.id';
+      : 'https://wartakita.pages.dev';
     const cleanOrigin = rawOrigin.replace(/\/+$/, '');
     const slugOrId = encodeURIComponent(article.slug || article.id);
     return `${cleanOrigin}/berita/${slugOrId}`;
   } catch {
-    return `https://wartakita.id/berita/${encodeURIComponent(article.id)}`;
+    return `https://wartakita.pages.dev/berita/${encodeURIComponent(article.id)}`;
   }
 }
 
