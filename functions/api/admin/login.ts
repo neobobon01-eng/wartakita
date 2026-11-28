@@ -1,3 +1,5 @@
+import { isSameOriginRequest } from '../_utils/origin';
+
 
 function json(data: unknown, status = 200, headers: HeadersInit = {}) {
   return Response.json(data, {
@@ -65,6 +67,10 @@ const MAX_ATTEMPTS = 5;
 const BLOCK_SECONDS = 15 * 60;
 
 export async function onRequestPost(context: any) {
+  if (!isSameOriginRequest(context.request)) {
+    return json({ success: false, message: 'Asal permintaan tidak diizinkan.' }, 403);
+  }
+
   try {
     let body: Record<string, unknown>;
 
