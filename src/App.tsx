@@ -2534,21 +2534,32 @@ function AdminDashboardView({
       setReportsError('');
 
       try {
-        const response = await fetch('/api/admin/reports', {
-          method: 'GET',
-          credentials: 'include',
-          cache: 'no-store'
-        });
+        const allReports = [];
+        let page = 1;
+        let hasMore = true;
 
-        const data = await response.json();
+        while (hasMore) {
+          const response = await fetch(`/api/admin/reports?page=${page}`, {
+            method: 'GET',
+            credentials: 'include',
+            cache: 'no-store'
+          });
+          const data = await response.json();
 
-        if (!response.ok || !data.success) {
-          throw new Error(data.message || 'Gagal mengambil laporan pembaca.');
+          if (!response.ok || !data.success) {
+            throw new Error(data.message || 'Gagal mengambil laporan pembaca.');
+          }
+
+          if (Array.isArray(data.reports)) allReports.push(...data.reports);
+          hasMore = Boolean(data.hasMore);
+          page += 1;
+
+          if (page > 1000000) {
+            throw new Error('Pengambilan laporan dihentikan karena jumlah halaman tidak wajar.');
+          }
         }
 
-        if (!cancelled) {
-          setReports(Array.isArray(data.reports) ? data.reports : []);
-        }
+        if (!cancelled) setReports(allReports);
       } catch (error) {
         if (!cancelled) {
           setReportsError(error.message || 'Gagal memuat laporan pembaca.');
@@ -3590,18 +3601,32 @@ export default function App() {
 
     async function loadAdminArticles() {
       try {
-        const response = await fetch('/api/admin/articles', {
-          method: 'GET',
-          credentials: 'include',
-          cache: 'no-store'
-        });
-        const data = await response.json();
+        const allArticles = [];
+        let page = 1;
+        let hasMore = true;
 
-        if (!response.ok || !data.success) {
-          throw new Error(data.message || 'Gagal mengambil daftar berita admin.');
+        while (hasMore) {
+          const response = await fetch(`/api/admin/articles?page=${page}`, {
+            method: 'GET',
+            credentials: 'include',
+            cache: 'no-store'
+          });
+          const data = await response.json();
+
+          if (!response.ok || !data.success) {
+            throw new Error(data.message || 'Gagal mengambil daftar berita admin.');
+          }
+
+          if (Array.isArray(data.articles)) allArticles.push(...data.articles);
+          hasMore = Boolean(data.hasMore);
+          page += 1;
+
+          if (page > 1000000) {
+            throw new Error('Pengambilan berita dihentikan karena jumlah halaman tidak wajar.');
+          }
         }
 
-        const normalizedArticles = (data.articles || []).map((item) => {
+        const normalizedArticles = allArticles.map((item) => {
           const dateText = String(item.created_at || item.updated_at || '');
           const parsedDate = dateText
             ? new Date(dateText.includes('T') ? dateText : `${dateText.replace(' ', 'T')}Z`)
