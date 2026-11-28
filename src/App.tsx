@@ -1499,7 +1499,7 @@ function WriteArticleView({ categories, onPublishArticle, onNavigate, onShowToas
   const validateForm = () => {
     const errors = [];
     const cleanAuthor = author.trim();
-    const cleanWhatsapp = whatsapp.trim().replace(/[\\s()-]/g, '');
+    const cleanWhatsapp = whatsapp.trim().replace(/[\s()-]/g, '');
     const cleanTitle = title.trim();
     const cleanContent = content.trim();
     const cleanSummary = summary.trim();
@@ -1509,7 +1509,7 @@ function WriteArticleView({ categories, onPublishArticle, onNavigate, onShowToas
     else if (cleanAuthor.length > 100) errors.push('Nama Penulis: maksimal 100 karakter.');
 
     if (!cleanWhatsapp) errors.push('Nomor WhatsApp: wajib diisi.');
-    else if (!/^\\+?[0-9]{9,16}$/.test(cleanWhatsapp)) errors.push('Nomor WhatsApp: masukkan 9–16 angka, boleh diawali tanda +. Contoh: 081234567890.');
+    else if (!/^\+?[0-9]{9,16}$/.test(cleanWhatsapp)) errors.push('Nomor WhatsApp: masukkan 9–16 angka, boleh diawali tanda +. Contoh: 081234567890.');
 
     if (!cleanTitle) errors.push('Judul Berita: wajib diisi.');
     else if (cleanTitle.length < 10) errors.push('Judul Berita: minimal 10 karakter.');
@@ -1555,7 +1555,7 @@ function WriteArticleView({ categories, onPublishArticle, onNavigate, onShowToas
 
     const created = await onPublishArticle({
       author: author.trim(),
-      whatsapp: whatsapp.trim(),
+      whatsapp: cleanWhatsapp,
       title: title.trim(),
       category,
       summary:
