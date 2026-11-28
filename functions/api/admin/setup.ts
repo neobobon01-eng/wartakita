@@ -1,5 +1,5 @@
 import { isSameOriginRequest } from '../_utils/origin';
-
+import { checkPublicRateLimit } from '../_utils/rate-limit';
 
 function json(data: unknown, status = 200) {
   return Response.json(data, {
@@ -51,10 +51,66 @@ export async function onRequestPost(context: any) {
     return json({ success: false, message: 'Asal permintaan tidak diizinkan.' }, 403);
   }
 
-  let stage = 'membaca_data_form';
+  let stage = 'memeriksa_status_setup';
 
   try {
-    const body = await context.request.json() as Record<string, unknown>;
+    // Setup hanya boleh berjalan sebelum akun admin pertama dibuat.
+    // Setelah admin tersedia, endpoint ditutup permanen agar tidak bisa
+    // digunakan untuk mencoba ulang atau mengganti akun admin.
+    const existing = await context.env.DB
+      .prepare('SELECT COUNT(*) AS total FROM admins')
+      .first<{ total: number }>();
+
+    if (Number(existing?.total || 0) > 0) {
+      return json({
+        success: false,
+        message: 'Akun admin sudah dibuat. Endpoint setup awal telah dinonaktifkan.',
+      }, 409);
+    }
+
+    stage = 'membatasi_percobaan_setup';
+
+    const ipAddress = context.request.headers.get('CF-Connecting-IP');
+    if (!ipAddress) {
+      return json({
+        success: false,
+        message: 'Permintaan tidak dapat diverifikasi.',
+      }, 503);
+    }
+
+    const rateLimit = await checkPublicRateLimit(
+      context.env.DB,
+      ipAddress,
+      'admin-setup',
+      3,
+      60 * 60,
+      60 * 60
+    );
+
+    if (!rateLimit.allowed) {
+      return Response.json(
+        {
+          success: false,
+          message: 'Terlalu banyak percobaan setup. Silakan coba lagi nanti.',
+        },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(rateLimit.retryAfter),
+            'Cache-Control': 'no-store',
+          },
+        }
+      );
+    }
+
+    stage = 'membaca_data_form';
+
+    let body: Record<string, unknown>;
+    try {
+      body = await context.request.json() as Record<string, unknown>;
+    } catch {
+      return json({ success: false, message: 'Data setup tidak valid.' }, 400);
+    }
 
     stage = 'memeriksa_kode_setup';
 
@@ -86,13 +142,15 @@ export async function onRequestPost(context: any) {
       }, 400);
     }
 
+    // Periksa ulang tepat sebelum proses pembuatan untuk mengurangi
+    // kemungkinan dua permintaan setup berjalan bersamaan.
     stage = 'memeriksa_akun_admin';
 
-    const existing = await context.env.DB
+    const latest = await context.env.DB
       .prepare('SELECT COUNT(*) AS total FROM admins')
       .first<{ total: number }>();
 
-    if (Number(existing?.total || 0) > 0) {
+    if (Number(latest?.total || 0) > 0) {
       return json({
         success: false,
         message: 'Akun admin sudah dibuat. Setup awal tidak dapat diulang.',
