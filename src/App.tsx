@@ -1497,17 +1497,33 @@ function WriteArticleView({ categories, onPublishArticle, onNavigate, onShowToas
   };
 
   const validateForm = () => {
-    if (!author.trim()) return 'Nama penulis wajib diisi.';
-    if (!whatsapp.trim() || whatsapp.trim().length < 8) {
-      return 'Nomor WhatsApp wajib diisi dengan format yang valid.';
-    }
-    if (!title.trim()) return 'Judul berita wajib diisi.';
-    if (!category.trim()) return 'Kategori berita wajib dipilih.';
-    if (!content.trim()) return 'Isi berita wajib diisi.';
-    if (!agreed) {
-      return 'Anda wajib menyetujui pernyataan tanggung jawab isi berita sebelum menerbitkan.';
-    }
-    return '';
+    const errors = [];
+    const cleanAuthor = author.trim();
+    const cleanWhatsapp = whatsapp.trim().replace(/[\\s()-]/g, '');
+    const cleanTitle = title.trim();
+    const cleanContent = content.trim();
+    const cleanSummary = summary.trim();
+
+    if (!cleanAuthor) errors.push('Nama Penulis: wajib diisi.');
+    else if (cleanAuthor.length < 2) errors.push('Nama Penulis: minimal 2 karakter.');
+    else if (cleanAuthor.length > 100) errors.push('Nama Penulis: maksimal 100 karakter.');
+
+    if (!cleanWhatsapp) errors.push('Nomor WhatsApp: wajib diisi.');
+    else if (!/^\\+?[0-9]{9,16}$/.test(cleanWhatsapp)) errors.push('Nomor WhatsApp: masukkan 9–16 angka, boleh diawali tanda +. Contoh: 081234567890.');
+
+    if (!cleanTitle) errors.push('Judul Berita: wajib diisi.');
+    else if (cleanTitle.length < 10) errors.push('Judul Berita: minimal 10 karakter.');
+    else if (cleanTitle.length > 200) errors.push('Judul Berita: maksimal 200 karakter.');
+
+    if (!category.trim()) errors.push('Kategori Berita: wajib dipilih.');
+    if (!cleanContent) errors.push('Isi Berita: wajib diisi.');
+    else if (cleanContent.length < 50) errors.push('Isi Berita: minimal 50 karakter.');
+    else if (cleanContent.length > 50000) errors.push('Isi Berita: maksimal 50.000 karakter.');
+
+    if (cleanSummary.length > 500) errors.push('Ringkasan Berita: maksimal 500 karakter.');
+    if (!agreed) errors.push('Persetujuan Tanggung Jawab: wajib dicentang.');
+
+    return errors.length ? 'Periksa bagian berikut sebelum menerbitkan:\\n• ' + errors.join('\\n• ') : '';
   };
 
   const handlePreviewClick = () => {
@@ -1786,7 +1802,7 @@ function WriteArticleView({ categories, onPublishArticle, onNavigate, onShowToas
         {formError && (
           <div className="mt-4 bg-red-50 border border-red-200 text-red-800 rounded-xl p-3.5 text-sm font-medium flex items-start gap-2.5">
             <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-            <span>{formError}</span>
+            <span className="whitespace-pre-line">{formError}</span>
           </div>
         )}
 
