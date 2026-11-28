@@ -1,3 +1,5 @@
+import { checkPublicRateLimit } from "./_utils/rate-limit";
+
 function json(data: unknown, status = 200) {
   return Response.json(data, { status });
 }
@@ -31,6 +33,33 @@ function makeOwnershipCode() {
 
 export async function onRequestPost(context: any) {
   try {
+    const ipAddress = context.request.headers.get("CF-Connecting-IP");
+    if (!ipAddress) {
+      return json({ success: false, message: "Permintaan tidak dapat diverifikasi." }, 503);
+    }
+
+    const rateLimit = await checkPublicRateLimit(
+      context.env.DB,
+      ipAddress,
+      "article-create",
+      3,
+      60 * 60,
+      60 * 60
+    );
+
+    if (!rateLimit.allowed) {
+      return Response.json(
+        { success: false, message: "Batas pengiriman berita tercapai. Silakan coba lagi nanti." },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(rateLimit.retryAfter),
+            "Cache-Control": "no-store"
+          }
+        }
+      );
+    }
+
     const body = await context.request.json();
     const title = String(body.title || "").trim();
     const content = String(body.content || "").trim();
