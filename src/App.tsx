@@ -1545,6 +1545,7 @@ function WriteArticleView({ categories, onPublishArticle, onNavigate, onShowToas
     }
 
     setFormError('');
+    const cleanWhatsapp = whatsapp.trim().replace(/[\\s()-]/g, '');
     const fallbackImg = createIllustrationDataUrl({
       title: title.trim(),
       tag: category,
