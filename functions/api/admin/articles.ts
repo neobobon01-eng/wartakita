@@ -1,3 +1,5 @@
+import { isSameOriginRequest } from '../_utils/origin';
+
 function json(data: unknown, status = 200) {
   return Response.json(data, {
     status,
@@ -99,6 +101,10 @@ export async function onRequestGet(context: any) {
 }
 
 export async function onRequestPost(context: any) {
+  if (!isSameOriginRequest(context.request)) {
+    return json({ success: false, message: 'Asal permintaan tidak diizinkan.' }, 403);
+  }
+
   try {
     const admin = await verifyAdmin(context);
     if (!admin) {
@@ -214,6 +220,10 @@ export async function onRequestPost(context: any) {
 }
 
 export async function onRequestPut(context: any) {
+  if (!isSameOriginRequest(context.request)) {
+    return json({ success: false, message: 'Asal permintaan tidak diizinkan.' }, 403);
+  }
+
   try {
     const admin = await verifyAdmin(context);
     if (!admin) {
@@ -272,6 +282,10 @@ export async function onRequestPut(context: any) {
 }
 
 export async function onRequestDelete(context: any) {
+  if (!isSameOriginRequest(context.request)) {
+    return json({ success: false, message: 'Asal permintaan tidak diizinkan.' }, 403);
+  }
+
   try {
     const admin = await verifyAdmin(context);
     if (!admin) {
