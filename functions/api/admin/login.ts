@@ -126,10 +126,6 @@ export async function onRequestPost(context: any) {
       });
     }
 
-    const windowExpired =
-      !attempt ||
-      now - Number(attempt.window_started_at) >= WINDOW_SECONDS;
-
     const admin = await context.env.DB
       .prepare(`
         SELECT id, username, password_hash, is_active
