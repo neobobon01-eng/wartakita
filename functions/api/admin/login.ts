@@ -146,47 +146,71 @@ export async function onRequestPost(context: any) {
       await verifyPassword(password, String(admin.password_hash));
 
     if (!validLogin) {
-      const nextAttempts = windowExpired
-        ? 1
-        : Number(attempt.attempts) + 1;
+      // Catat kegagalan secara atomik agar permintaan bersamaan tidak
+      // membaca angka percobaan lama lalu saling menimpa hasilnya.
+      const failedAttempt = await context.env.DB.prepare(`
+        INSERT INTO admin_login_attempts
+          (key_hash, attempts, window_started_at, blocked_until, updated_at)
+        VALUES (?, 1, ?, NULL, ?)
+        ON CONFLICT(key_hash) DO UPDATE SET
+          attempts = CASE
+            WHEN admin_login_attempts.blocked_until IS NOT NULL
+                 AND admin_login_attempts.blocked_until > excluded.updated_at
+              THEN admin_login_attempts.attempts
+            WHEN (admin_login_attempts.blocked_until IS NOT NULL
+                  AND admin_login_attempts.blocked_until <= excluded.updated_at)
+                 OR excluded.updated_at - admin_login_attempts.window_started_at >= ?
+              THEN 1
+            ELSE admin_login_attempts.attempts + 1
+          END,
+          window_started_at = CASE
+            WHEN admin_login_attempts.blocked_until IS NOT NULL
+                 AND admin_login_attempts.blocked_until > excluded.updated_at
+              THEN admin_login_attempts.window_started_at
+            WHEN (admin_login_attempts.blocked_until IS NOT NULL
+                  AND admin_login_attempts.blocked_until <= excluded.updated_at)
+                 OR excluded.updated_at - admin_login_attempts.window_started_at >= ?
+              THEN excluded.updated_at
+            ELSE admin_login_attempts.window_started_at
+          END,
+          blocked_until = CASE
+            WHEN admin_login_attempts.blocked_until IS NOT NULL
+                 AND admin_login_attempts.blocked_until > excluded.updated_at
+              THEN admin_login_attempts.blocked_until
+            WHEN (admin_login_attempts.blocked_until IS NOT NULL
+                  AND admin_login_attempts.blocked_until <= excluded.updated_at)
+                 OR excluded.updated_at - admin_login_attempts.window_started_at >= ?
+              THEN NULL
+            WHEN admin_login_attempts.attempts + 1 >= ?
+              THEN excluded.updated_at + ?
+            ELSE NULL
+          END,
+          updated_at = excluded.updated_at
+        RETURNING attempts, window_started_at, blocked_until
+      `).bind(
+        keyHash,
+        now,
+        now,
+        WINDOW_SECONDS,
+        WINDOW_SECONDS,
+        WINDOW_SECONDS,
+        MAX_ATTEMPTS,
+        BLOCK_SECONDS
+      ).first<any>();
 
-      const blockedUntil =
-        nextAttempts >= MAX_ATTEMPTS
-          ? now + BLOCK_SECONDS
-          : null;
-
-      if (windowExpired) {
-        await context.env.DB.prepare(`
-          INSERT INTO admin_login_attempts
-            (key_hash, attempts, window_started_at, blocked_until, updated_at)
-          VALUES (?, 1, ?, NULL, ?)
-          ON CONFLICT(key_hash) DO UPDATE SET
-            attempts = 1,
-            window_started_at = excluded.window_started_at,
-            blocked_until = NULL,
-            updated_at = excluded.updated_at
-        `).bind(keyHash, now, now).run();
-      } else {
-        await context.env.DB.prepare(`
-          UPDATE admin_login_attempts
-          SET attempts = ?,
-              blocked_until = ?,
-              updated_at = ?
-          WHERE key_hash = ?
-        `).bind(
-          nextAttempts,
-          blockedUntil,
-          now,
-          keyHash
-        ).run();
+      if (!failedAttempt) {
+        throw new Error('Database tidak mengonfirmasi percobaan login gagal.');
       }
 
-      if (nextAttempts >= MAX_ATTEMPTS) {
+      if (
+        failedAttempt.blocked_until !== null &&
+        Number(failedAttempt.blocked_until) > now
+      ) {
         return json({
           success: false,
           message: 'Terlalu banyak percobaan login. Silakan coba lagi setelah 15 menit.',
         }, 429, {
-          'Retry-After': String(BLOCK_SECONDS),
+          'Retry-After': String(Math.max(1, Number(failedAttempt.blocked_until) - now)),
         });
       }
 
