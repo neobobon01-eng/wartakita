@@ -2510,53 +2510,7 @@ function AdminDashboardView({
   onOpenDetail,
   onLogout
 }) {
-  const [activeTab, setActiveTab] = useState('all'); // 'all' | 'review' | 'deleted' | 'categories'
-  const [adminReports, setAdminReports] = useState([]);
-  const [reportsLoading, setReportsLoading] = useState(false);
-  const [reportsError, setReportsError] = useState('');
-  const [updatingReportId, setUpdatingReportId] = useState(null);
- useEffect(() => {
-  let cancelled = false;
-
-  async function loadAdminReports() {
-    setReportsLoading(true);
-    setReportsError('');
-
-    try {
-      const response = await fetch('/api/admin/reports', {
-        method: 'GET',
-        credentials: 'include',
-        cache: 'no-store'
-      });
-
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.message || 'Gagal mengambil daftar laporan.');
-      }
-
-      if (!cancelled) {
-        setAdminReports(Array.isArray(data.reports) ? data.reports : []);
-      }
-    } catch (error) {
-      if (!cancelled) {
-        setReportsError(
-          error.message || 'Gagal mengambil daftar laporan.'
-        );
-      }
-    } finally {
-      if (!cancelled) {
-        setReportsLoading(false);
-      }
-    }
-  }
-
-  loadAdminReports();
-
-  return () => {
-    cancelled = true;
-  };
-}, [adminRefreshKey]);
+  const [activeTab, setActiveTab] = useState('all'); // 'all' | 'review' | 'deleted' | 'categories' | 'reports'
   const [editingArticle, setEditingArticle] = useState(null);
   const [editTitle, setEditTitle] = useState('');
   const [editCategory, setEditCategory] = useState('');
@@ -2611,7 +2565,7 @@ function AdminDashboardView({
     return () => {
       cancelled = true;
     };
-  }, [reportsRefreshKey]);
+  }, [reportsRefreshKey, adminRefreshKey]);
 
   const handleMarkReportReviewed = async (reportId) => {
     setUpdatingReportId(reportId);
@@ -2653,55 +2607,13 @@ function AdminDashboardView({
   const publishedCount = articles.filter((a) => a.status === 'published').length;
   const reportedCount = articles.filter((a) => a.reportCount > 0 && a.status !== 'deleted').length;
   const deletedCount = articles.filter((a) => a.status === 'deleted').length;
+  const pendingReportCount = reports.filter((report) => report.status === 'pending').length;
 
   const needsReviewArticles = useMemo(
     () => articles.filter((a) => a.status !== 'deleted' && (a.reportCount > 0 || a.status === 'flagged')),
     [articles]
   );
 
-  const handleMarkReportReviewed = async (reportId) => {
-  setUpdatingReportId(reportId);
-
-  try {
-    const response = await fetch('/api/admin/reports', {
-      method: 'PATCH',
-      credentials: 'include',
-      cache: 'no-store',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        report_id: reportId
-      })
-    });
-
-    const result = await response.json();
-
-    if (!response.ok || !result.success) {
-      throw new Error(
-        result.message || 'Gagal memperbarui status laporan.'
-      );
-    }
-
-    setAdminReports((previous) =>
-      previous.map((report) =>
-        Number(report.id) === Number(reportId)
-          ? { ...report, status: 'reviewed' }
-          : report
-      )
-    );
-
-    alert(result.message || 'Laporan berhasil ditandai sudah diperiksa.');
-  } catch (error) {
-    alert(error.message || 'Gagal memperbarui status laporan.');
-  } finally {
-    setUpdatingReportId(null);
-  }
-};
-
-const pendingReportCount = adminReports.filter(
-  (report) => report.status === 'pending'
-).length;
   const visibleArticles = useMemo(() => {
     if (activeTab === 'review') return needsReviewArticles;
     if (activeTab === 'deleted') return articles.filter((a) => a.status === 'deleted');
@@ -2890,6 +2802,18 @@ const pendingReportCount = adminReports.filter(
 
         <button
           type="button"
+          onClick={() => setActiveTab('reports')}
+          className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition ${
+            activeTab === 'reports'
+              ? 'bg-orange-500 text-white'
+              : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+          }`}
+        >
+          Laporan Pembaca ({pendingReportCount})
+        </button>
+
+        <button
+          type="button"
           onClick={() => setActiveTab('categories')}
           className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition ${
             activeTab === 'categories'
@@ -2899,18 +2823,6 @@ const pendingReportCount = adminReports.filter(
         >
           Kelola Kategori ({categories.length})
         </button>
-
-        <button
-  type="button"
-  onClick={() => setActiveTab('reports')}
-  className={`px-4 py-2 rounded-xl text-sm font-bold transition-colors ${
-    activeTab === 'reports'
-      ? 'bg-orange-500 text-white'
-      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-  }`}
->
-  Laporan Pembaca ({pendingReportCount})
-</button>
       </div>
 
       {/* Modal/Panel Edit Berita oleh Admin */}
@@ -3057,106 +2969,100 @@ const pendingReportCount = adminReports.filter(
           </div>
         </div>
       ) : activeTab === 'reports' ? (
-  <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
-    <div>
-      <h2 className="text-lg font-extrabold text-[#0b1f3a]">
-        Laporan Pembaca
-      </h2>
-      <p className="text-sm text-slate-500">
-        Daftar laporan yang dikirim oleh pembaca untuk diperiksa admin.
-      </p>
-    </div>
-
-    {reportsLoading ? (
-      <p className="text-sm text-slate-500">Memuat laporan pembaca...</p>
-    ) : reportsError ? (
-      <div className="rounded-xl bg-red-50 border border-red-200 p-4">
-        <p className="text-sm text-red-700">{reportsError}</p>
-        <button
-          type="button"
-          onClick={onRefreshData}
-          className="mt-3 px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-bold"
-        >
-          Coba Lagi
-        </button>
-      </div>
-    ) : adminReports.length === 0 ? (
-      <p className="text-sm text-slate-500">
-        Belum ada laporan pembaca.
-      </p>
-    ) : (
-      <div className="space-y-3">
-        {adminReports.map((report) => (
-          <div
-            key={report.id}
-            className="border border-slate-200 rounded-xl p-4 space-y-3"
-          >
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="font-bold text-[#0b1f3a]">
-                {report.article_title || `Berita ID ${report.article_id}`}
-              </h3>
-
-              <span
-                className={`text-xs font-bold px-3 py-1 rounded-full ${
-                  report.status === 'pending'
-                    ? 'bg-amber-100 text-amber-800'
-                    : 'bg-green-100 text-green-800'
-                }`}
-              >
-                {report.status === 'pending'
-                  ? 'Menunggu Pemeriksaan'
-                  : 'Sudah Diperiksa'}
-              </span>
-            </div>
-
-            <div className="text-sm text-slate-700 space-y-1">
-              <p>
-                <strong>Alasan laporan:</strong> {report.reason || '-'}
-              </p>
-
-              {report.description && (
-                <p>
-                  <strong>Detail laporan:</strong> {report.description}
-                </p>
-              )}
-
-              {report.reporter_name && (
-                <p>
-                  <strong>Nama pelapor:</strong> {report.reporter_name}
-                </p>
-              )}
-
-              {report.reporter_whatsapp && (
-                <p>
-                  <strong>WhatsApp:</strong> {report.reporter_whatsapp}
-                </p>
-              )}
-
-              <p>
-                <strong>Tanggal laporan:</strong>{' '}
-                {report.created_at || '-'}
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+          <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-extrabold text-[#0b1f3a]">Laporan Pembaca</h2>
+              <p className="text-xs text-slate-500">
+                Daftar laporan yang dikirim pembaca untuk setiap berita WARTAKITA.
               </p>
             </div>
-
-            {report.status === 'pending' && (
-              <button
-                type="button"
-                disabled={updatingReportId === report.id}
-                onClick={() => handleMarkReportReviewed(report.id)}
-                className="px-4 py-2 rounded-lg bg-[#0b1f3a] text-white text-sm font-bold disabled:opacity-50"
-              >
-                {updatingReportId === report.id
-                  ? 'Memproses...'
-                  : 'Tandai Sudah Diperiksa'}
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => setReportsRefreshKey((current) => current + 1)}
+              disabled={reportsLoading}
+              className="px-4 py-2 rounded-xl bg-[#0b1f3a] hover:bg-[#13335e] disabled:opacity-50 text-white text-xs font-bold"
+            >
+              {reportsLoading ? 'Memuat...' : 'Muat Ulang Laporan'}
+            </button>
           </div>
-        ))}
-      </div>
-    )}
-  </div>
-) : (
-  /* Daftar Berita untuk Moderasi Admin */
+
+          {reportsError && (
+            <div className="m-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+              {reportsError}
+            </div>
+          )}
+
+          {reportsLoading && reports.length === 0 ? (
+            <div className="p-8 text-center text-sm text-slate-500">
+              Memuat laporan pembaca...
+            </div>
+          ) : reports.length === 0 ? (
+            <div className="p-8 text-center text-sm text-slate-500">
+              Belum ada laporan pembaca.
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {reports.map((report) => (
+                <div key={report.id} className="p-4 sm:p-5 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                            report.status === 'reviewed'
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          {report.status === 'reviewed' ? 'Sudah diperiksa' : 'Menunggu pemeriksaan'}
+                        </span>
+                        <span className="text-xs text-slate-400">
+                          {report.created_at
+                            ? new Date(report.created_at).toLocaleString('id-ID')
+                            : 'Waktu tidak tersedia'}
+                        </span>
+                      </div>
+                      <h3 className="text-sm sm:text-base font-bold text-[#0b1f3a] break-words">
+                        {report.article_title || `Berita #${report.article_id}`}
+                      </h3>
+                      <p className="text-xs font-semibold text-orange-700">
+                        Alasan laporan: {report.reason || 'Tidak disebutkan'}
+                      </p>
+                    </div>
+
+                    {report.status !== 'reviewed' && (
+                      <button
+                        type="button"
+                        onClick={() => handleMarkReportReviewed(report.id)}
+                        disabled={updatingReportId === report.id}
+                        className="shrink-0 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold"
+                      >
+                        {updatingReportId === report.id ? 'Menyimpan...' : 'Tandai Sudah Diperiksa'}
+                      </button>
+                    )}
+                  </div>
+
+                  {report.description && (
+                    <p className="text-sm text-slate-700 whitespace-pre-wrap break-words">
+                      {report.description}
+                    </p>
+                  )}
+
+                  <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-500">
+                    <span>Pelapor: {report.reporter_name || 'Anonim'}</span>
+                    {report.reporter_whatsapp && (
+                      <span>WhatsApp: {report.reporter_whatsapp}</span>
+                    )}
+                    <span>ID laporan: {report.id}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        /* Daftar Berita untuk Moderasi Admin */
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
           <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
