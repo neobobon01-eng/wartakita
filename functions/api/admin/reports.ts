@@ -54,6 +54,19 @@ export async function onRequestGet(context: any) {
       }, 401);
     }
 
+    const url = new URL(context.request.url);
+    const requestedPage = Number(url.searchParams.get('page') || 1);
+    const page = Number.isSafeInteger(requestedPage) && requestedPage > 0
+      ? Math.min(requestedPage, 1000000)
+      : 1;
+    const limit = 50;
+    const offset = (page - 1) * limit;
+
+    const countResult = await context.env.DB.prepare(
+      'SELECT COUNT(*) AS total FROM article_reports'
+    ).first<any>();
+    const total = Number(countResult?.total || 0);
+
     const result = await context.env.DB.prepare(`
       SELECT
         r.id,
@@ -73,11 +86,17 @@ export async function onRequestGet(context: any) {
       LEFT JOIN articles a ON a.id = r.article_id
       ORDER BY
         CASE WHEN r.status = 'pending' THEN 0 ELSE 1 END,
-        r.created_at DESC
-    `).all();
+        r.created_at DESC,
+        r.id DESC
+      LIMIT ? OFFSET ?
+    `).bind(limit, offset).all();
 
     return json({
       success: true,
+      page,
+      limit,
+      total,
+      hasMore: offset + result.results.length < total,
       reports: result.results || [],
     });
   } catch (error) {
