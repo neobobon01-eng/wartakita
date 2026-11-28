@@ -19,12 +19,16 @@ export async function onRequestGet(context: any): Promise<Response> {
     `).bind(slug).first<any>();
     if (!a) return notFound();
 
-    const origin = new URL(context.request.url).origin;
+    const requestUrl = new URL(context.request.url);
+    const origin = requestUrl.origin;
     const canonical = new URL(`/berita/${encodeURIComponent(a.slug)}`, origin).toString();
+    const shareVersion = (requestUrl.searchParams.get("v") || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 40);
     const rawImage = typeof a.image_url === "string" ? a.image_url.trim() : "";
     let image = "";
     if (/^data:image\/(jpeg|png|webp);base64,/i.test(rawImage)) {
-      image = new URL(`/api/articles/image/${encodeURIComponent(String(a.id))}`, origin).toString();
+      const imageUrl = new URL(`/api/articles/image/${encodeURIComponent(String(a.id))}`, origin);
+      if (shareVersion) imageUrl.searchParams.set("v", shareVersion);
+      image = imageUrl.toString();
     } else if (/^https:\/\//i.test(rawImage)) {
       image = rawImage;
     }
@@ -49,7 +53,7 @@ export async function onRequestGet(context: any): Promise<Response> {
 <title>${t} | WARTAKITA</title><meta name="description" content="${d}">
 <link rel="canonical" href="${u}">
 <meta property="og:site_name" content="WARTAKITA"><meta property="og:type" content="article">
-<meta property="og:locale" content="id_ID"><meta property="og:url" content="${u}">
+<meta property="og:locale" content="id_ID"><meta property="og:url" content="${esc(requestUrl.toString())}">
 <meta property="og:title" content="${t}"><meta property="og:description" content="${d}">${imageTags}
 <meta name="twitter:card" content="${image ? "summary_large_image" : "summary"}">
 <meta name="twitter:title" content="${t}"><meta name="twitter:description" content="${d}">
