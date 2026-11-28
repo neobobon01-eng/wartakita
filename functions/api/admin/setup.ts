@@ -1,3 +1,5 @@
+import { isSameOriginRequest } from '../_utils/origin';
+
 
 function json(data: unknown, status = 200) {
   return Response.json(data, {
@@ -45,6 +47,10 @@ export async function onRequestGet(context: any) {
 }
 
 export async function onRequestPost(context: any) {
+  if (!isSameOriginRequest(context.request)) {
+    return json({ success: false, message: 'Asal permintaan tidak diizinkan.' }, 403);
+  }
+
   let stage = 'membaca_data_form';
 
   try {
