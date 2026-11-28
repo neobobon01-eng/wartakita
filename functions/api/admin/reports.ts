@@ -1,3 +1,5 @@
+import { isSameOriginRequest } from '../_utils/origin';
+
 
 function json(data: unknown, status = 200) {
   return Response.json(data, {
@@ -90,6 +92,10 @@ export async function onRequestGet(context: any) {
 
 // Menandai satu laporan sebagai sudah diperiksa.
 export async function onRequestPatch(context: any) {
+  if (!isSameOriginRequest(context.request)) {
+    return json({ success: false, message: 'Asal permintaan tidak diizinkan.' }, 403);
+  }
+
   try {
     const admin = await verifyAdmin(context);
 
