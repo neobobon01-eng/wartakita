@@ -2525,6 +2525,7 @@ function AdminDashboardView({
   const [reportsError, setReportsError] = useState('');
   const [reportsRefreshKey, setReportsRefreshKey] = useState(0);
   const [updatingReportId, setUpdatingReportId] = useState(null);
+  const [deletingReportId, setDeletingReportId] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -3042,16 +3043,64 @@ function AdminDashboardView({
                       </p>
                     </div>
 
-                    {report.status !== 'reviewed' && (
+                    <div className="flex flex-wrap gap-2">
+                      {report.status !== 'reviewed' && (
+                        <button
+                          type="button"
+                          onClick={() => handleMarkReportReviewed(report.id)}
+                          disabled={updatingReportId === report.id || deletingReportId === report.id}
+                          className="shrink-0 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold"
+                        >
+                          {updatingReportId === report.id ? 'Menyimpan...' : 'Tandai Sudah Diperiksa'}
+                        </button>
+                      )}
+                      {report.article_status !== 'deleted' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const title = report.article_title || `Berita #${report.article_id}`;
+                            if (window.confirm(`Hapus berita "${title}" dari publikasi WARTAKITA? Berita akan masuk ke daftar Berita Dihapus dan dapat dipulihkan. Laporan ini tidak ikut dihapus.`)) {
+                              onAdminDeleteArticle(report.article_id, 'Dihapus dari tindak lanjut laporan pembaca');
+                            }
+                          }}
+                          disabled={deletingReportId === report.id}
+                          className="shrink-0 px-3 py-2 rounded-xl bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-bold"
+                        >
+                          Hapus Berita
+                        </button>
+                      )}
                       <button
                         type="button"
-                        onClick={() => handleMarkReportReviewed(report.id)}
-                        disabled={updatingReportId === report.id}
-                        className="shrink-0 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold"
+                        onClick={async () => {
+                          const reportLabel = report.article_title || `Berita #${report.article_id}`;
+                          if (!window.confirm(`Hapus catatan laporan untuk "${reportLabel}"? Berita tidak akan dihapus.`)) return;
+                          setDeletingReportId(report.id);
+                          try {
+                            const response = await fetch('/api/admin/reports', {
+                              method: 'DELETE',
+                              credentials: 'include',
+                              cache: 'no-store',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ report_id: report.id })
+                            });
+                            const data = await response.json();
+                            if (!response.ok || !data.success) {
+                              throw new Error(data.message || 'Laporan gagal dihapus.');
+                            }
+                            setReports((previous) => previous.filter((item) => item.id !== report.id));
+                            alert('Catatan laporan berhasil dihapus. Berita tidak berubah.');
+                          } catch (error) {
+                            alert(error.message || 'Gagal menghapus laporan.');
+                          } finally {
+                            setDeletingReportId(null);
+                          }
+                        }}
+                        disabled={deletingReportId === report.id || updatingReportId === report.id}
+                        className="shrink-0 px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-800 disabled:opacity-50 text-white text-xs font-bold"
                       >
-                        {updatingReportId === report.id ? 'Menyimpan...' : 'Tandai Sudah Diperiksa'}
+                        {deletingReportId === report.id ? 'Menghapus...' : 'Hapus Laporan'}
                       </button>
-                    )}
+                    </div>
                   </div>
 
                   {report.description && (
